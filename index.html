@@ -1,187 +1,881 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>英会話練習（Edge版 / 無料MVP）</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>英会話練習（Edge無料MVP）</title>
   <style>
-    body{font-family:system-ui,-apple-system,"Segoe UI",Meiryo,Arial,sans-serif;margin:20px;line-height:1.6}
-    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-    select,button,input{font-size:16px;padding:8px}
-    .card{border:1px solid #ddd;border-radius:10px;padding:12px;margin-top:12px}
-    .good{background:#e6ffed;padding:2px 6px;border-radius:6px}
-    .bad{background:#ffecec;padding:2px 6px;border-radius:6px}
-    .small{opacity:.8;font-size:13px}
+    :root{
+      --bg:#0b1220; --panel:#111a2e; --panel2:#0f172a;
+      --text:#e6edf7; --muted:#9bb0d0; --accent:#4cc9f0; --ok:#45d483; --ng:#ff6b6b;
+      --chip:#1c2a4a; --border:rgba(255,255,255,.08);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,Segoe UI,Meiryo,Arial;background:linear-gradient(180deg,#070b14,#0b1220 30%,#070b14);color:var(--text)}
+    header{padding:18px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(11,18,32,.92);backdrop-filter: blur(10px);z-index:10}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .title{font-size:18px;font-weight:700}
+    .badge{padding:4px 8px;border:1px solid var(--border);border-radius:999px;background:rgba(255,255,255,.03);color:var(--muted);font-size:12px}
+    main{max-width:1100px;margin:0 auto;padding:16px}
+    .grid{display:grid;grid-template-columns: 1.2fr .8fr;gap:12px}
+    @media(max-width:980px){.grid{grid-template-columns:1fr}}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));
+      border:1px solid var(--border);border-radius:14px;padding:14px}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap}
+    .tab{padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,.02);color:var(--text);cursor:pointer}
+    .tab.active{border-color:rgba(76,201,240,.6);box-shadow:0 0 0 2px rgba(76,201,240,.15) inset}
+    .muted{color:var(--muted);font-size:12px;line-height:1.6}
+    select,button,input,textarea{
+      background:rgba(255,255,255,.03);border:1px solid var(--border);color:var(--text);
+      border-radius:10px;padding:10px;font-size:14px
+    }
+    button{cursor:pointer}
+    button.primary{background:rgba(76,201,240,.12);border-color:rgba(76,201,240,.45)}
+    button.ok{background:rgba(69,212,131,.12);border-color:rgba(69,212,131,.45)}
+    button.ng{background:rgba(255,107,107,.12);border-color:rgba(255,107,107,.45)}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .h2{font-size:15px;font-weight:700;margin:0 0 8px}
+    .h3{font-size:13px;font-weight:700;margin:10px 0 6px}
+    .divider{height:1px;background:var(--border);margin:12px 0}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:999px}
+    .chips{display:flex;gap:8px;flex-wrap:wrap}
+    .chip{padding:5px 9px;background:var(--chip);border:1px solid var(--border);border-radius:999px;font-size:12px;color:var(--muted)}
+    .kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .k{padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,.02)}
+    .k .v{font-size:18px;font-weight:800}
+    .k .l{font-size:12px;color:var(--muted)}
+    .qbox{padding:12px;border-radius:12px;background:rgba(255,255,255,.02);border:1px solid var(--border)}
+    .choices{display:grid;gap:8px;margin-top:10px}
+    .choice{padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,.02);cursor:pointer}
+    .choice.correct{border-color:rgba(69,212,131,.6);background:rgba(69,212,131,.08)}
+    .choice.wrong{border-color:rgba(255,107,107,.6);background:rgba(255,107,107,.08)}
+    .small{font-size:12px}
+    .hl-ok{background:rgba(69,212,131,.18);border-radius:6px;padding:2px 4px}
+    .hl-ng{background:rgba(255,107,107,.18);border-radius:6px;padding:2px 4px}
+    textarea{width:100%;min-height:140px;resize:vertical}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace}
   </style>
 </head>
 <body>
-  <h1>英会話練習（Edge版 / 無料MVP）</h1>
-
-  <div class="card">
-    <div class="row">
-      <label>レベル：</label>
-      <select id="level">
-        <option value="L0">L0 完全初心者（TOEIC&lt;300）</option>
-        <option value="L1">L1 初心者（300-500）</option>
-        <option value="L2">L2 初中級（500-650）</option>
-        <option value="L3">L3 中級（650+）</option>
+<header>
+  <div class="row">
+    <div class="title">英会話練習（Edge無料MVP）</div>
+    <span class="badge" id="ver">v2.0</span>
+    <span class="badge">無料 / ブラウザ音声</span>
+    <span class="badge">学習管理つき</span>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <div class="pill">
+      レベル
+      <select id="levelSel">
+        <option value="A0">完全初心者（TOEIC 300未満）</option>
+        <option value="A1">初心者（TOEIC 300-500）</option>
+        <option value="A2">初中級（TOEIC 500-650）</option>
+        <option value="B1">中級（TOEIC 650+）</option>
       </select>
-
-      <label>シーン：</label>
-      <select id="scene"></select>
-
-      <button id="tts">お手本を聞く</button>
-      <button id="rec">🎙️ 録音して判定</button>
     </div>
-
-    <p id="target" style="font-weight:700;margin-top:10px"></p>
-    <div class="small">※ マイク許可が必要です（Edgeのアドレスバー左の🔒から許可）</div>
+    <div class="pill">
+      モード
+      <div class="tabs" id="tabs"></div>
+    </div>
   </div>
+</header>
 
-  <div class="card">
-    <h3>結果（差分）</h3>
-    <div id="diff"></div>
-    <h3>日本語フィードバック（日本人の弱点）</h3>
-    <ul id="tips"></ul>
-  </div>
+<main>
+  <div class="grid">
+    <section class="card" id="left">
+      <!-- content injected -->
+    </section>
 
-  <div class="card">
-    <h3>学習ログ（localStorage）</h3>
-    <div id="log"></div>
-    <button id="reset">ログリセット</button>
+    <aside class="card">
+      <div class="h2">学習管理</div>
+      <div class="muted">このPC内（localStorage）に保存。アカウント不要。</div>
+      <div class="divider"></div>
+
+      <div class="kpi">
+        <div class="k"><div class="v" id="k_today">0</div><div class="l">今日の回数</div></div>
+        <div class="k"><div class="v" id="k_acc">0%</div><div class="l">正答率（ドリル）</div></div>
+        <div class="k"><div class="v" id="k_streak">0</div><div class="l">連続日数</div></div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="h3">苦手タグ（直近）</div>
+      <div class="chips" id="weakTags"></div>
+
+      <div class="divider"></div>
+      <div class="h3">履歴（最新10件）</div>
+      <div class="muted" id="history"></div>
+
+      <div class="divider"></div>
+      <button class="ng" id="resetBtn">学習データをリセット</button>
+      <div class="muted small">※アプリが壊れたときだけ。問題データも含め初期化。</div>
+    </aside>
   </div>
+</main>
 
 <script>
-const scenes = [
-  {id:"s1", lvl:["L0","L1"], title:"あいさつ", target:"Hello. Nice to meet you."},
-  {id:"s2", lvl:["L0","L1"], title:"自己紹介", target:"I am from Japan."},
-  {id:"s3", lvl:["L0","L1"], title:"道を聞く", target:"Where is the station?"},
-  {id:"s4", lvl:["L1","L2"], title:"注文", target:"I'd like a coffee, please."},
-  {id:"s5", lvl:["L2","L3"], title:"会議開始", target:"Let's get started with today's agenda."},
-  {id:"s6", lvl:["L2","L3"], title:"納期", target:"Could you deliver it by next Friday?"},
-  {id:"s7", lvl:["L1","L2"], title:"お願い", target:"Could you help me with this?"},
-  {id:"s8", lvl:["L0","L1"], title:"買い物", target:"How much is this?"},
-  {id:"s9", lvl:["L1","L2"], title:"電話", target:"May I speak to Mr. Tanaka?"},
-  {id:"s10",lvl:["L2","L3"], title:"意見", target:"In my opinion, this is the best option."},
+/* =========================
+   0) Storage / Utilities
+========================= */
+const APP_KEY = "eikaiwa_edge_v2";
+const todayKey = () => new Date().toISOString().slice(0,10);
+
+function loadState(){
+  const raw = localStorage.getItem(APP_KEY);
+  if(!raw){
+    return {
+      createdAt: Date.now(),
+      streak: { lastDay:null, count:0 },
+      stats: { drillTotal:0, drillCorrect:0 },
+      today: { day: todayKey(), count:0 },
+      weak: {}, // tag -> score
+      history: [],
+      custom: { drills: [] }
+    };
+  }
+  try { return JSON.parse(raw); } catch { return null; }
+}
+function saveState(s){ localStorage.setItem(APP_KEY, JSON.stringify(s)); }
+
+let STATE = loadState();
+if(!STATE){
+  localStorage.removeItem(APP_KEY);
+  STATE = loadState();
+}
+
+function bumpToday(){
+  const d = todayKey();
+  if(STATE.today.day !== d){ STATE.today = {day:d,count:0}; }
+  STATE.today.count++;
+  // streak
+  const last = STATE.streak.lastDay;
+  if(!last){
+    STATE.streak = { lastDay:d, count:1 };
+  }else{
+    const lastDate = new Date(last);
+    const now = new Date(d);
+    const diffDays = Math.round((now - lastDate)/(1000*60*60*24));
+    if(diffDays === 0){
+      // same day
+    }else if(diffDays === 1){
+      STATE.streak = { lastDay:d, count: STATE.streak.count + 1 };
+    }else{
+      STATE.streak = { lastDay:d, count:1 };
+    }
+  }
+  saveState(STATE);
+}
+
+function addHistory(item){
+  STATE.history.unshift({ t: Date.now(), ...item });
+  STATE.history = STATE.history.slice(0,10);
+  saveState(STATE);
+}
+
+function addWeak(tag, delta){
+  if(!tag) return;
+  if(!STATE.weak[tag]) STATE.weak[tag] = 0;
+  STATE.weak[tag] += delta;
+  // clamp
+  STATE.weak[tag] = Math.max(-50, Math.min(50, STATE.weak[tag]));
+  saveState(STATE);
+}
+
+function escapeHtml(s){
+  return (s||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+}
+function normText(s){
+  return (s||"")
+    .toLowerCase()
+    .replace(/[’']/g,"'")
+    .replace(/[^a-z0-9\s']/g," ")
+    .replace(/\s+/g," ")
+    .trim();
+}
+function tokens(s){
+  const t = normText(s);
+  return t ? t.split(" ") : [];
+}
+function uniq(arr){
+  return [...new Set(arr)];
+}
+function pct(n,d){ if(!d) return "0%"; return Math.round((n/d)*100)+"%"; }
+
+/* =========================
+   1) Japanese-learner feedback rules
+========================= */
+function japaneseWeaknessFeedback(expected, said){
+  // expected/said are strings
+  const exp = normText(expected);
+  const got = normText(said);
+  const expTok = tokens(exp);
+  const gotTok = tokens(got);
+
+  // Simple diff counts
+  const expSet = new Map();
+  expTok.forEach(w => expSet.set(w, (expSet.get(w)||0)+1));
+  const gotSet = new Map();
+  gotTok.forEach(w => gotSet.set(w, (gotSet.get(w)||0)+1));
+
+  const missing = [];
+  const extra = [];
+  expSet.forEach((c,w)=>{
+    const g = gotSet.get(w)||0;
+    if(g < c) missing.push(w);
+  });
+  gotSet.forEach((c,w)=>{
+    const e = expSet.get(w)||0;
+    if(e < c) extra.push(w);
+  });
+
+  // Japanese-learner common grammar checks (very lightweight heuristics)
+  const tips = [];
+
+  // Articles a/the
+  const hasArticle = expTok.some(w=>["a","an","the"].includes(w));
+  if(hasArticle){
+    const missArticle = ["a","an","the"].filter(a=>expTok.includes(a) && !gotTok.includes(a));
+    if(missArticle.length){
+      tips.push({ tag:"冠詞", text:`冠詞（a/an/the）が抜けやすいです。今回は「${missArticle.join(", ")}」が聞こえませんでした。` });
+    }
+  }
+
+  // Prepositions
+  const preps = ["in","on","at","to","for","from","with","by","of","about","into","over","under","between","before","after"];
+  const expPreps = preps.filter(p=>expTok.includes(p));
+  const missPreps = expPreps.filter(p=>!gotTok.includes(p));
+  if(missPreps.length){
+    tips.push({ tag:"前置詞", text:`前置詞が抜けやすいです。「${missPreps.join(", ")}」を意識して、前置詞を“短く弱く”入れてみてください。` });
+  }
+
+  // 3rd person -s (heuristic): expects endswith s but got base
+  const thirdPairs = [
+    ["goes","go"],["does","do"],["has","have"],["likes","like"],["needs","need"],["wants","want"],["works","work"],["plays","play"]
+  ];
+  thirdPairs.forEach(([sForm, base])=>{
+    if(expTok.includes(sForm) && gotTok.includes(base) && !gotTok.includes(sForm)){
+      tips.push({ tag:"三単現", text:`三単現の -s が落ちやすいです。「${sForm}」を語尾までしっかり。` });
+    }
+  });
+
+  // past -ed (heuristic)
+  const edPairs = [["worked","work"],["played","play"],["needed","need"],["wanted","want"],["called","call"],["asked","ask"],["helped","help"],["checked","check"]];
+  edPairs.forEach(([ed, base])=>{
+    if(expTok.includes(ed) && gotTok.includes(base) && !gotTok.includes(ed)){
+      tips.push({ tag:"過去形", text:`過去形 -ed が落ちやすいです。「${ed}」を語尾まで。/t/ /d/ /ɪd/ のどれかになります。` });
+    }
+  });
+
+  // R/L, TH are phonetic; with free STT we can't reliably detect. Keep practice guidance:
+  if(exp.includes("l") || exp.includes("r")){
+    tips.push({ tag:"発音", text:`発音のコツ：Rは舌をどこにも付けず奥で丸める、Lは舌先を上の歯茎に“当てる”。（聞き分けより“作り分け”が先です）` });
+  }
+  if(exp.includes("th")){
+    tips.push({ tag:"発音", text:`THのコツ：舌先を上下の歯の間に少し出して息を抜く（think）。濁る版は this。` });
+  }
+
+  // Score: overlap ratio
+  const common = expTok.filter(w => gotSet.get(w));
+  const score = expTok.length ? Math.round((common.length / expTok.length)*100) : 0;
+
+  return { score, missing: uniq(missing), extra: uniq(extra), tips };
+}
+
+function highlightDiff(expected, said){
+  const expTok = tokens(expected);
+  const gotTok = tokens(said);
+
+  const gotCount = new Map();
+  gotTok.forEach(w=>gotCount.set(w,(gotCount.get(w)||0)+1));
+
+  // mark expected tokens: ok if exists in gotCount (consume)
+  const marks = [];
+  expTok.forEach(w=>{
+    const c = gotCount.get(w)||0;
+    if(c>0){
+      marks.push({w, ok:true});
+      gotCount.set(w,c-1);
+    }else{
+      marks.push({w, ok:false});
+    }
+  });
+
+  // extra tokens: those remaining in gotCount >0
+  const extra = [];
+  gotCount.forEach((c,w)=>{ for(let i=0;i<c;i++) extra.push(w); });
+
+  const expHtml = marks.map(m => m.ok ? `<span class="hl-ok">${escapeHtml(m.w)}</span>` : `<span class="hl-ng">${escapeHtml(m.w)}</span>`).join(" ");
+  const extraHtml = extra.length ? extra.map(w=>`<span class="hl-ng">${escapeHtml(w)}</span>`).join(" ") : "(なし)";
+  return { expHtml, extraHtml };
+}
+
+/* =========================
+   2) Content (scenes + drills)
+   - For scale: add later. For now: curated + level mapping.
+========================= */
+const LEVELS = ["A0","A1","A2","B1"];
+
+const SCENES = [
+  // A0/A1: daily
+  {id:"s1", level:"A0", title:"あいさつ", ja:"挨拶する", en:"Hello. Nice to meet you.", tips:"最初は“全部言う”より、止まらず言い切る。"},
+  {id:"s2", level:"A0", title:"お願い", ja:"ゆっくり話して", en:"Could you speak slowly, please?", tips:"Could you ... please? は万能型。"},
+  {id:"s3", level:"A1", title:"買い物", ja:"これください", en:"I'd like this, please.", tips:"I'd like〜 は丁寧で便利。"},
+  {id:"s4", level:"A1", title:"道案内", ja:"駅はどこ？", en:"Where is the station?", tips:"Where is + 場所？の型を定着。"},
+  // A2/B1
+  {id:"s5", level:"A2", title:"日程調整", ja:"明日は空いてますか？", en:"Are you available tomorrow?", tips:"available は“空いてる”。"},
+  {id:"s6", level:"B1", title:"依頼", ja:"今日中に確認できますか？", en:"Could you review it by the end of today?", tips:"by the end of〜 はビジネス頻出。"}
 ];
 
-const $ = (id)=>document.getElementById(id);
-const levelSel=$("level"), sceneSel=$("scene"), targetEl=$("target");
-const diffEl=$("diff"), tipsEl=$("tips"), logEl=$("log");
-
-function tokenize(s){return s.toLowerCase().replace(/[^\w'\s]/g,"").split(/\s+/).filter(Boolean);}
-function diffWords(target, said){
-  const a=tokenize(target), b=tokenize(said);
-  const setB=new Set(b);
-  return a.map(w => setB.has(w) ? `<span class="good">${w}</span>` : `<span class="bad">${w}</span>`).join(" ");
-}
-function jpTips(target, said){
-  const tips=[];
-  const t=target.toLowerCase();
-  const s=said.toLowerCase();
-  // 日本人が苦手になりやすいポイントをざっくり検出
-  if (t.includes("th")) tips.push("TH：舌先を上下の歯の間に軽く出して息を出します（サ行にしない）。");
-  if (t.match(/\br\b/) || t.match(/\bl\b/)) tips.push("L/R：舌の位置が違います。Lは舌先を上前歯の裏、Rは舌を奥に丸め気味で浮かせます。");
-  if (t.match(/\b(s|es)\b/) || t.match(/\b\w+s\b/)) tips.push("語尾の子音：語尾のS/T/Kなどを落としやすいので、息だけでも出して締めます。");
-  if (t.includes("nice to") || t.includes("get started") || t.includes("could you")) tips.push("リンキング：単語を切らずに『ナイス(トゥ)』『クッジュ』のように繋げます。");
-  if (t.match(/\b(a|an|the)\b/)) tips.push("冠詞：a/an/the を抜きやすいので、短くても必ず入れます。");
-  if (!s || s.trim().length<2) tips.push("音声が取れていない可能性：マイク許可/入力デバイス/静かな環境を確認してください。");
-  return tips;
+function drillsCommonByLevel(level){
+  // 共通弱点：冠詞/前置詞/三単現/過去形
+  // 形式：MCQ（穴埋め）
+  const base = [
+    {id:"c_a_1", level:"A0", type:"mcq", tag:"冠詞", q:"I have ___ apple.", a:"an", c:["a","an","the","(no article)"], explain:"母音（a,e,i,o,u）で始まる単語の前は an が基本。"},
+    {id:"c_p_1", level:"A0", type:"mcq", tag:"前置詞", q:"I'm ___ Tokyo.", a:"in", c:["in","on","at","to"], explain:"都市・国など“範囲”は in。"},
+    {id:"c_p_2", level:"A1", type:"mcq", tag:"前置詞", q:"Let's meet ___ 3 p.m.", a:"at", c:["in","on","at","to"], explain:"時刻ピンポイントは at。"},
+    {id:"c_3s_1", level:"A1", type:"mcq", tag:"三単現", q:"He ___ to work every day.", a:"goes", c:["go","goes","going","went"], explain:"He/She/It の現在形は動詞に -s / -es。"},
+    {id:"c_ed_1", level:"A1", type:"mcq", tag:"過去形", q:"I ___ you yesterday.", a:"called", c:["call","called","calling","calls"], explain:"過去の出来事は過去形。"},
+    {id:"c_a_2", level:"A2", type:"mcq", tag:"冠詞", q:"Can you pass me ___ salt?", a:"the", c:["a","an","the","(no article)"], explain:"会話の場で“その塩”と特定できると the。"},
+    {id:"c_p_3", level:"A2", type:"mcq", tag:"前置詞", q:"I'm looking ___ my keys.", a:"for", c:["for","at","to","about"], explain:"look for = 探す。"},
+    {id:"c_3s_2", level:"A2", type:"mcq", tag:"三単現", q:"She ___ a car.", a:"has", c:["have","has","having","had"], explain:"have の三単現は has。"},
+    {id:"c_ed_2", level:"B1", type:"mcq", tag:"過去形", q:"We ___ the report by noon.", a:"finished", c:["finish","finished","finishing","finishes"], explain:"by + 時刻 の前に完了した、を示すなら過去形が自然。"}
+  ];
+  // filter by <= level
+  const idx = LEVELS.indexOf(level);
+  return base.filter(d => LEVELS.indexOf(d.level) <= idx);
 }
 
-function loadScenes(){
-  const lvl=levelSel.value;
-  sceneSel.innerHTML="";
-  scenes.filter(x=>x.lvl.includes(lvl)).forEach(x=>{
-    const opt=document.createElement("option");
-    opt.value=x.id; opt.textContent=x.title;
-    sceneSel.appendChild(opt);
-  });
-  updateTarget();
-}
-function updateTarget(){
-  const sc=scenes.find(x=>x.id===sceneSel.value) || scenes[0];
-  targetEl.textContent="目標文： " + sc.target;
-  diffEl.innerHTML="";
-  tipsEl.innerHTML="";
-}
-levelSel.addEventListener("change", loadScenes);
-sceneSel.addEventListener("change", updateTarget);
+const DRILLS_EIKEN = [
+  // 英検っぽい：並べ替え＋穴埋め（短文）
+  {id:"e1", level:"A1", type:"reorder", tag:"英検_語順", q:"（並べ替え）「私はあなたを手伝えます。」", words:["can","I","help","you"], a:"I can help you", explain:"助動詞 can は主語の後。"},
+  {id:"e2", level:"A2", type:"reorder", tag:"英検_語順", q:"（並べ替え）「彼は昨日学校へ行きました。」", words:["went","to","school","he","yesterday"], a:"He went to school yesterday", explain:"基本：主語→動詞→目的語→時間。"},
+  {id:"e3", level:"A2", type:"mcq", tag:"英検_穴埋め", q:"She is good ___ math.", a:"at", c:["in","on","at","to"], explain:"be good at 〜 が型。"},
+  {id:"e4", level:"B1", type:"mcq", tag:"英検_穴埋め", q:"If it ___ tomorrow, we'll stay home.", a:"rains", c:["rain","rains","rained","raining"], explain:"if節の現在形（未来でも現在形）。"}
+];
 
+const DRILLS_TOEIC = [
+  // TOEIC Part5風：文法・品詞
+  {id:"t1", level:"A1", type:"mcq", tag:"TOEIC_P5", q:"The manager will ___ the schedule tomorrow.", a:"review", c:["review","reviews","reviewed","reviewing"], explain:"will の後は動詞の原形。"},
+  {id:"t2", level:"A2", type:"mcq", tag:"TOEIC_P5", q:"Please submit the form ___ Friday.", a:"by", c:["by","in","on","at"], explain:"締切は by。"},
+  {id:"t3", level:"A2", type:"mcq", tag:"TOEIC_P5", q:"We are ___ to announce the new product.", a:"pleased", c:["please","pleased","pleasing","pleasure"], explain:"be pleased to 〜（形容詞）。"},
+  {id:"t4", level:"B1", type:"mcq", tag:"TOEIC_P5", q:"The meeting was postponed ___ a technical issue.", a:"due to", c:["because","due to","since","so"], explain:"due to + 名詞。because/since は節。"}
+];
+
+/* =========================
+   3) Web Speech (TTS + STT)
+========================= */
 function speak(text){
-  const u=new SpeechSynthesisUtterance(text);
-  u.lang="en-US";
-  speechSynthesis.cancel();
-  speechSynthesis.speak(u);
-}
-
-$("tts").addEventListener("click", ()=>{
-  const sc=scenes.find(x=>x.id===sceneSel.value);
-  speak(sc.target);
-});
-
-function logUpdate(ok){
-  const key="eikaiwa_log_v1";
-  const now=new Date();
-  const today=now.toISOString().slice(0,10);
-  const data=JSON.parse(localStorage.getItem(key) || '{"today":"","todayCount":0,"total":0,"streak":0,"lastDay":""}');
-  if (data.today !== today){
-    // streak
-    if (data.lastDay){
-      const last=new Date(data.lastDay);
-      const d=(now-last)/(1000*60*60*24);
-      data.streak = (d>0.9 && d<1.9) ? (data.streak+1) : 1;
-    } else data.streak=1;
-    data.today=today;
-    data.todayCount=0;
-    data.lastDay=today;
-  }
-  data.todayCount += 1;
-  data.total += 1;
-  localStorage.setItem(key, JSON.stringify(data));
-  renderLog();
-}
-
-function renderLog(){
-  const key="eikaiwa_log_v1";
-  const data=JSON.parse(localStorage.getItem(key) || '{"today":"","todayCount":0,"total":0,"streak":0,"lastDay":""}');
-  logEl.innerHTML = `
-    <div>今日：${data.today} / 回数：${data.todayCount}</div>
-    <div>累計：${data.total}</div>
-    <div>連続日数：${data.streak}</div>
-  `;
-}
-$("reset").addEventListener("click", ()=>{
-  localStorage.removeItem("eikaiwa_log_v1");
-  renderLog();
-});
-
-let rec;
-$("rec").addEventListener("click", ()=>{
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition){
-    alert("このブラウザは音声認識に対応していません（Edge最新版で試してください）");
+  if(!("speechSynthesis" in window)){
+    alert("このブラウザは音声読み上げに対応していません。");
     return;
   }
-  const sc=scenes.find(x=>x.id===sceneSel.value);
-  rec = new SpeechRecognition();
-  rec.lang="en-US";
-  rec.interimResults=false;
-  rec.maxAlternatives=1;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "en-US";
+  u.rate = 1.0;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
+}
 
-  rec.onresult=(e)=>{
-    const said=e.results[0][0].transcript;
-    diffEl.innerHTML = `<div><b>あなた：</b> ${said}</div><div style="margin-top:8px">${diffWords(sc.target, said)}</div>`;
-    const tips=jpTips(sc.target, said);
-    tipsEl.innerHTML = tips.map(t=>`<li>${t}</li>`).join("");
-    logUpdate(true);
+function createRecognizer(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR) return null;
+  const r = new SR();
+  r.lang = "en-US";
+  r.interimResults = false;
+  r.maxAlternatives = 1;
+  return r;
+}
+
+/* =========================
+   4) UI: Tabs + Render
+========================= */
+const TABS = [
+  { key:"talk", label:"会話練習" },
+  { key:"common", label:"共通ドリル" },   // 3
+  { key:"eiken", label:"英検" },          // 2
+  { key:"toeic", label:"TOEIC P5" },      // 1
+  { key:"custom", label:"オリジナル問題" }
+];
+
+let ACTIVE = "common"; // start from common drills
+let CURRENT = { drill:null, scene:null };
+
+const elTabs = document.getElementById("tabs");
+const elLeft = document.getElementById("left");
+const elLevel = document.getElementById("levelSel");
+
+// restore last level
+const savedLevel = localStorage.getItem(APP_KEY+"_level");
+if(savedLevel && LEVELS.includes(savedLevel)) elLevel.value = savedLevel;
+
+function renderTabs(){
+  elTabs.innerHTML = "";
+  TABS.forEach(t=>{
+    const b = document.createElement("button");
+    b.className = "tab" + (t.key===ACTIVE ? " active": "");
+    b.textContent = t.label;
+    b.onclick = ()=>{ ACTIVE=t.key; renderTabs(); renderLeft(); };
+    elTabs.appendChild(b);
+  });
+}
+
+function renderStats(){
+  // today
+  const d = todayKey();
+  if(STATE.today.day !== d){ STATE.today = {day:d,count:0}; saveState(STATE); }
+  document.getElementById("k_today").textContent = STATE.today.count;
+  document.getElementById("k_acc").textContent = pct(STATE.stats.drillCorrect, STATE.stats.drillTotal);
+  document.getElementById("k_streak").textContent = STATE.streak.count;
+
+  // weak tags
+  const entries = Object.entries(STATE.weak)
+    .sort((a,b)=> a[1]-b[1]) // lower = weaker
+    .slice(0,8);
+
+  const wrap = document.getElementById("weakTags");
+  wrap.innerHTML = entries.length ? "" : `<span class="muted">まだデータがありません</span>`;
+  entries.forEach(([tag,score])=>{
+    const s = document.createElement("span");
+    s.className = "chip";
+    s.textContent = `${tag}（${score<=0 ? "弱" : "伸"}）`;
+    wrap.appendChild(s);
+  });
+
+  // history
+  const h = document.getElementById("history");
+  if(!STATE.history.length){
+    h.innerHTML = `<span class="muted">まだありません</span>`;
+  }else{
+    h.innerHTML = STATE.history.map(x=>{
+      const t = new Date(x.t).toLocaleString();
+      const res = x.ok==null ? "" : (x.ok ? "✅" : "❌");
+      return `<div class="small">• ${escapeHtml(t)} ${res} ${escapeHtml(x.title||x.type||"")}</div>`;
+    }).join("");
+  }
+}
+
+function levelFilter(items){
+  const lv = elLevel.value;
+  const idx = LEVELS.indexOf(lv);
+  return items.filter(it => LEVELS.indexOf(it.level) <= idx);
+}
+
+/* =========================
+   5) Renders: Talk
+========================= */
+function pickScene(){
+  const lv = elLevel.value;
+  const pool = levelFilter(SCENES);
+  // prefer near level
+  const idx = LEVELS.indexOf(lv);
+  const near = pool.filter(s => Math.abs(LEVELS.indexOf(s.level)-idx) <= 1);
+  const p = near.length ? near : pool;
+  return p[Math.floor(Math.random()*p.length)];
+}
+
+function renderTalk(){
+  const scene = CURRENT.scene || pickScene();
+  CURRENT.scene = scene;
+
+  elLeft.innerHTML = `
+    <div class="h2">会話練習（お手本 → 録音 → 差分 → 日本語フィードバック）</div>
+    <div class="muted">日本人がつまずきやすい「冠詞/前置詞/三単現/過去形」も自動でコメントします。</div>
+    <div class="divider"></div>
+
+    <div class="qbox">
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <div class="h3">${escapeHtml(scene.title)} <span class="chip">${scene.level}</span></div>
+          <div class="muted">日本語：${escapeHtml(scene.ja)}</div>
+        </div>
+        <button class="primary" id="nextScene">別シーン</button>
+      </div>
+      <div class="divider"></div>
+      <div class="h3">お手本（英語）</div>
+      <div style="font-size:18px;font-weight:800">${escapeHtml(scene.en)}</div>
+      <div class="muted">${escapeHtml(scene.tips||"")}</div>
+
+      <div class="divider"></div>
+      <div class="row">
+        <button class="primary" id="btnSpeak">🔊 お手本を聞く</button>
+        <button class="ok" id="btnRec">🎙️ 録音して判定</button>
+      </div>
+
+      <div class="divider"></div>
+      <div class="h3">結果</div>
+      <div class="muted small">緑=一致 / 赤=不足（期待したのに聞こえない）</div>
+      <div id="diffExp" class="mono" style="margin-top:6px"></div>
+      <div class="muted small" style="margin-top:10px">余分に聞こえた語（赤）</div>
+      <div id="diffExtra" class="mono" style="margin-top:6px"></div>
+
+      <div class="divider"></div>
+      <div class="h3">日本語フィードバック</div>
+      <div id="fb" class="muted"></div>
+    </div>
+  `;
+
+  document.getElementById("nextScene").onclick = ()=>{
+    CURRENT.scene = pickScene();
+    renderTalk();
   };
-  rec.onerror=()=>{ tipsEl.innerHTML="<li>認識に失敗。マイク許可や入力デバイスを確認してください。</li>"; };
-  rec.start();
-});
+  document.getElementById("btnSpeak").onclick = ()=> speak(scene.en);
 
-loadScenes();
-renderLog();
+  document.getElementById("btnRec").onclick = async ()=>{
+    const rec = createRecognizer();
+    if(!rec){
+      alert("このブラウザは音声認識に対応していません。");
+      return;
+    }
+    bumpToday(); // count attempt
+    renderStats();
+
+    const btn = document.getElementById("btnRec");
+    btn.disabled = true;
+    btn.textContent = "🎙️ 聞き取り中...";
+
+    rec.onresult = (e)=>{
+      const said = e.results?.[0]?.[0]?.transcript || "";
+      const { expHtml, extraHtml } = highlightDiff(scene.en, said);
+      document.getElementById("diffExp").innerHTML = expHtml || "(認識できませんでした)";
+      document.getElementById("diffExtra").innerHTML = extraHtml;
+
+      const fb = japaneseWeaknessFeedback(scene.en, said);
+      const lines = [];
+      lines.push(`一致度（目安）：<b>${fb.score}%</b>`);
+      if(fb.missing.length) lines.push(`不足しがちな語：<b>${fb.missing.join(", ")}</b>`);
+      if(fb.extra.length) lines.push(`余分に聞こえた語：<b>${fb.extra.join(", ")}</b>`);
+      if(!fb.missing.length && !fb.extra.length) lines.push("かなり近いです。次はスピードを少し上げて“つながり”を意識。");
+
+      // tips and weak tags
+      if(fb.tips.length){
+        lines.push("<br><b>日本人向けの指摘：</b>");
+        fb.tips.forEach(t=>{
+          lines.push(`• ${escapeHtml(t.text)}`);
+          // if missing triggers, treat as weak
+          if(t.tag) addWeak(t.tag, -2);
+        });
+      }
+
+      document.getElementById("fb").innerHTML = lines.join("<br>");
+
+      addHistory({ type:"talk", title:`会話:${scene.title}`, ok:null });
+      saveState(STATE);
+      renderStats();
+
+      btn.disabled = false;
+      btn.textContent = "🎙️ 録音して判定";
+    };
+
+    rec.onerror = ()=>{
+      btn.disabled = false;
+      btn.textContent = "🎙️ 録音して判定";
+      document.getElementById("fb").innerHTML = "音声認識でエラーになりました。Edgeの🔒からマイク許可を確認してください。";
+    };
+
+    rec.onend = ()=>{
+      btn.disabled = false;
+      btn.textContent = "🎙️ 録音して判定";
+    };
+
+    try { rec.start(); } catch { btn.disabled=false; btn.textContent="🎙️ 録音して判定"; }
+  };
+}
+
+/* =========================
+   6) Renders: Drills (MCQ / Reorder)
+========================= */
+function pickDrill(mode){
+  const lv = elLevel.value;
+  let pool = [];
+  if(mode==="common") pool = drillsCommonByLevel(lv);
+  if(mode==="eiken") pool = levelFilter(DRILLS_EIKEN);
+  if(mode==="toeic") pool = levelFilter(DRILLS_TOEIC);
+  if(mode==="custom"){
+    pool = (STATE.custom?.drills || []).filter(d=>{
+      if(!d.level) return true;
+      return LEVELS.indexOf(d.level) <= LEVELS.indexOf(lv);
+    });
+  }
+  if(!pool.length) return null;
+  return pool[Math.floor(Math.random()*pool.length)];
+}
+
+function markAnswer(ok, drill){
+  bumpToday();
+  if(drill && drill.type){
+    STATE.stats.drillTotal++;
+    if(ok) STATE.stats.drillCorrect++;
+    // weak tag scoring
+    addWeak(drill.tag, ok ? +1 : -3);
+    addHistory({ type: drill.tag || drill.type, title: drill.id, ok });
+    saveState(STATE);
+  }
+  renderStats();
+}
+
+function renderMCQ(drill, modeTitle){
+  elLeft.innerHTML = `
+    <div class="h2">${escapeHtml(modeTitle)}</div>
+    <div class="muted">1問20〜40秒で回す設計。日本語解説つき。</div>
+    <div class="divider"></div>
+
+    <div class="qbox">
+      <div class="row" style="justify-content:space-between">
+        <div class="chips">
+          <span class="chip">${escapeHtml(drill.level||"")}</span>
+          <span class="chip">${escapeHtml(drill.tag||"")}</span>
+        </div>
+        <button class="primary" id="nextQ">次の問題</button>
+      </div>
+
+      <div class="divider"></div>
+      <div style="font-size:18px;font-weight:800">${escapeHtml(drill.q)}</div>
+
+      <div class="choices" id="choices"></div>
+
+      <div class="divider"></div>
+      <div class="h3">解説（日本語）</div>
+      <div class="muted" id="exp">(回答後に表示)</div>
+    </div>
+  `;
+
+  const choices = document.getElementById("choices");
+  drill.c.forEach(ch=>{
+    const div = document.createElement("div");
+    div.className = "choice";
+    div.textContent = ch;
+    div.onclick = ()=>{
+      // lock
+      [...choices.children].forEach(x=>x.onclick=null);
+
+      const ok = (ch === drill.a);
+      div.classList.add(ok ? "correct" : "wrong");
+      // highlight correct
+      [...choices.children].forEach(x=>{
+        if(x.textContent === drill.a) x.classList.add("correct");
+      });
+      document.getElementById("exp").textContent = drill.explain || "";
+      markAnswer(ok, drill);
+    };
+    choices.appendChild(div);
+  });
+
+  document.getElementById("nextQ").onclick = ()=>{
+    CURRENT.drill = pickDrill(ACTIVE);
+    renderLeft();
+  };
+}
+
+function renderReorder(drill, modeTitle){
+  // user clicks words to build answer
+  elLeft.innerHTML = `
+    <div class="h2">${escapeHtml(modeTitle)}</div>
+    <div class="muted">語順（並べ替え）。日本人は語順が“日本語のまま”になりやすいので、型で矯正します。</div>
+    <div class="divider"></div>
+
+    <div class="qbox">
+      <div class="row" style="justify-content:space-between">
+        <div class="chips">
+          <span class="chip">${escapeHtml(drill.level||"")}</span>
+          <span class="chip">${escapeHtml(drill.tag||"")}</span>
+        </div>
+        <button class="primary" id="nextQ">次の問題</button>
+      </div>
+
+      <div class="divider"></div>
+      <div style="font-size:18px;font-weight:800">${escapeHtml(drill.q)}</div>
+
+      <div class="divider"></div>
+      <div class="h3">単語を順にクリック</div>
+      <div class="chips" id="wordBank"></div>
+
+      <div class="divider"></div>
+      <div class="h3">あなたの回答</div>
+      <div class="qbox mono" id="ansBox"></div>
+
+      <div class="row" style="margin-top:10px">
+        <button class="ok" id="checkBtn">判定</button>
+        <button id="clearBtn">やり直し</button>
+        <button class="primary" id="speakBtn">🔊 正解を聞く</button>
+      </div>
+
+      <div class="divider"></div>
+      <div class="h3">解説（日本語）</div>
+      <div class="muted" id="exp">(判定後に表示)</div>
+    </div>
+  `;
+
+  const bank = document.getElementById("wordBank");
+  const ansBox = document.getElementById("ansBox");
+  let selected = [];
+
+  // shuffle
+  const words = drill.words.slice().sort(()=>Math.random()-0.5);
+  words.forEach(w=>{
+    const b = document.createElement("button");
+    b.textContent = w;
+    b.onclick = ()=>{
+      selected.push(w);
+      b.disabled = true;
+      ansBox.textContent = selected.join(" ");
+    };
+    bank.appendChild(b);
+  });
+
+  document.getElementById("clearBtn").onclick = ()=>{
+    selected = [];
+    ansBox.textContent = "";
+    [...bank.querySelectorAll("button")].forEach(b=>b.disabled=false);
+    document.getElementById("exp").textContent = "(判定後に表示)";
+  };
+
+  document.getElementById("speakBtn").onclick = ()=> speak(drill.a);
+
+  document.getElementById("checkBtn").onclick = ()=>{
+    const user = selected.join(" ");
+    const ok = normText(user) === normText(drill.a);
+    ansBox.innerHTML = ok
+      ? `<span class="hl-ok">${escapeHtml(user || "(空)")}</span>`
+      : `<span class="hl-ng">${escapeHtml(user || "(空)")}</span>`;
+
+    document.getElementById("exp").textContent = drill.explain || "";
+    markAnswer(ok, drill);
+  };
+
+  document.getElementById("nextQ").onclick = ()=>{
+    CURRENT.drill = pickDrill(ACTIVE);
+    renderLeft();
+  };
+}
+
+function renderDrill(mode){
+  const titles = {
+    common:"共通ドリル（冠詞/前置詞/三単現/過去形）",
+    eiken:"英検（穴埋め＋並べ替え）",
+    toeic:"TOEIC Part5（穴埋め）",
+    custom:"オリジナル問題（あなたが追加）"
+  };
+  const d = CURRENT.drill || pickDrill(mode);
+  CURRENT.drill = d;
+
+  if(!d){
+    elLeft.innerHTML = `
+      <div class="h2">${escapeHtml(titles[mode])}</div>
+      <div class="muted">このレベルで出せる問題がまだありません。</div>
+      <div class="divider"></div>
+      <div class="muted">→ オリジナル問題に追加するか、レベルを上げてみてください。</div>
+    `;
+    return;
+  }
+  if(d.type==="mcq") renderMCQ(d, titles[mode]);
+  else if(d.type==="reorder") renderReorder(d, titles[mode]);
+  else renderMCQ(d, titles[mode]); // fallback
+}
+
+/* =========================
+   7) Custom Problems UI
+========================= */
+function renderCustom(){
+  renderDrill("custom");
+
+  // Append editor under the drill card
+  const editor = document.createElement("div");
+  editor.className = "divider";
+  elLeft.appendChild(editor);
+
+  const box = document.createElement("div");
+  box.className = "qbox";
+  box.innerHTML = `
+    <div class="h3">オリジナル問題の追加（JSON）</div>
+    <div class="muted small">
+      形式：<b>MCQ</b>（穴埋め）または <b>reorder</b>（並べ替え）。<br>
+      保存するとこのPC内に残ります（無料）。<br>
+      ※例は下に入れてあります。そのまま追加してOK。
+    </div>
+    <div class="divider"></div>
+    <textarea id="customJson" class="mono"></textarea>
+    <div class="row" style="margin-top:10px">
+      <button class="ok" id="addCustomBtn">追加して保存</button>
+      <button id="exportBtn">いまの問題を表示（エクスポート）</button>
+    </div>
+    <div class="muted small" id="customMsg" style="margin-top:8px"></div>
+  `;
+  elLeft.appendChild(box);
+
+  const example = [
+    {id:"u1", level:"A0", type:"mcq", tag:"冠詞", q:"I bought ___ umbrella.", a:"an", c:["a","an","the","(no article)"], explain:"母音で始まるので an。"},
+    {id:"u2", level:"A1", type:"reorder", tag:"語順", q:"（並べ替え）「彼女は毎日走ります。」", words:["runs","she","every","day"], a:"She runs every day", explain:"主語→動詞→副詞句。"}
+  ];
+  document.getElementById("customJson").value = JSON.stringify(example, null, 2);
+
+  document.getElementById("addCustomBtn").onclick = ()=>{
+    const msg = document.getElementById("customMsg");
+    msg.textContent = "";
+    try{
+      const arr = JSON.parse(document.getElementById("customJson").value);
+      if(!Array.isArray(arr)) throw new Error("JSONは配列である必要があります。");
+
+      // validate minimal fields
+      arr.forEach((d,i)=>{
+        if(!d.id) d.id = `user_${Date.now()}_${i}`;
+        if(!d.type) throw new Error("type が必要（mcq / reorder）");
+        if(d.type==="mcq"){
+          if(!d.q || !d.a || !Array.isArray(d.c)) throw new Error("mcqは q/a/c が必要");
+        }
+        if(d.type==="reorder"){
+          if(!d.q || !d.a || !Array.isArray(d.words)) throw new Error("reorderは q/a/words が必要");
+        }
+        if(!d.level) d.level = "A0";
+        if(!d.tag) d.tag = "custom";
+      });
+
+      STATE.custom.drills = (STATE.custom.drills || []).concat(arr);
+      saveState(STATE);
+      msg.textContent = `追加しました（合計 ${STATE.custom.drills.length} 問）。`;
+      renderStats();
+      // next custom question
+      CURRENT.drill = pickDrill("custom");
+    }catch(e){
+      msg.textContent = "エラー：" + (e?.message || e);
+    }
+  };
+
+  document.getElementById("exportBtn").onclick = ()=>{
+    const msg = document.getElementById("customMsg");
+    document.getElementById("customJson").value = JSON.stringify(STATE.custom.drills || [], null, 2);
+    msg.textContent = "現在保存されているオリジナル問題を表示しました。";
+  };
+}
+
+/* =========================
+   8) Main render switch
+========================= */
+function renderLeft(){
+  if(ACTIVE==="talk") renderTalk();
+  else if(ACTIVE==="common") renderDrill("common");
+  else if(ACTIVE==="eiken") renderDrill("eiken");
+  else if(ACTIVE==="toeic") renderDrill("toeic");
+  else if(ACTIVE==="custom") renderCustom();
+  else renderDrill("common");
+}
+
+renderTabs();
+renderLeft();
+renderStats();
+
+elLevel.onchange = ()=>{
+  localStorage.setItem(APP_KEY+"_level", elLevel.value);
+  CURRENT = { drill:null, scene:null };
+  renderLeft();
+};
+
+document.getElementById("resetBtn").onclick = ()=>{
+  if(confirm("学習データをリセットします。よろしいですか？")){
+    localStorage.removeItem(APP_KEY);
+    localStorage.removeItem(APP_KEY+"_level");
+    location.reload();
+  }
+};
 </script>
 </body>
 </html>
