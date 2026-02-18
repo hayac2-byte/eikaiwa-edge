@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>英会話練習（Edge版 / 無料MVP）</title>
+  <style>
+    body{font-family:system-ui,-apple-system,"Segoe UI",Meiryo,Arial,sans-serif;margin:20px;line-height:1.6}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+    select,button,input{font-size:16px;padding:8px}
+    .card{border:1px solid #ddd;border-radius:10px;padding:12px;margin-top:12px}
+    .good{background:#e6ffed;padding:2px 6px;border-radius:6px}
+    .bad{background:#ffecec;padding:2px 6px;border-radius:6px}
+    .small{opacity:.8;font-size:13px}
+  </style>
+</head>
+<body>
+  <h1>英会話練習（Edge版 / 無料MVP）</h1>
+
+  <div class="card">
+    <div class="row">
+      <label>レベル：</label>
+      <select id="level">
+        <option value="L0">L0 完全初心者（TOEIC&lt;300）</option>
+        <option value="L1">L1 初心者（300-500）</option>
+        <option value="L2">L2 初中級（500-650）</option>
+        <option value="L3">L3 中級（650+）</option>
+      </select>
+
+      <label>シーン：</label>
+      <select id="scene"></select>
+
+      <button id="tts">お手本を聞く</button>
+      <button id="rec">🎙️ 録音して判定</button>
+    </div>
+
+    <p id="target" style="font-weight:700;margin-top:10px"></p>
+    <div class="small">※ マイク許可が必要です（Edgeのアドレスバー左の🔒から許可）</div>
+  </div>
+
+  <div class="card">
+    <h3>結果（差分）</h3>
+    <div id="diff"></div>
+    <h3>日本語フィードバック（日本人の弱点）</h3>
+    <ul id="tips"></ul>
+  </div>
+
+  <div class="card">
+    <h3>学習ログ（localStorage）</h3>
+    <div id="log"></div>
+    <button id="reset">ログリセット</button>
+  </div>
+
+<script>
+const scenes = [
+  {id:"s1", lvl:["L0","L1"], title:"あいさつ", target:"Hello. Nice to meet you."},
+  {id:"s2", lvl:["L0","L1"], title:"自己紹介", target:"I am from Japan."},
+  {id:"s3", lvl:["L0","L1"], title:"道を聞く", target:"Where is the station?"},
+  {id:"s4", lvl:["L1","L2"], title:"注文", target:"I'd like a coffee, please."},
+  {id:"s5", lvl:["L2","L3"], title:"会議開始", target:"Let's get started with today's agenda."},
+  {id:"s6", lvl:["L2","L3"], title:"納期", target:"Could you deliver it by next Friday?"},
+  {id:"s7", lvl:["L1","L2"], title:"お願い", target:"Could you help me with this?"},
+  {id:"s8", lvl:["L0","L1"], title:"買い物", target:"How much is this?"},
+  {id:"s9", lvl:["L1","L2"], title:"電話", target:"May I speak to Mr. Tanaka?"},
+  {id:"s10",lvl:["L2","L3"], title:"意見", target:"In my opinion, this is the best option."},
+];
+
+const $ = (id)=>document.getElementById(id);
+const levelSel=$("level"), sceneSel=$("scene"), targetEl=$("target");
+const diffEl=$("diff"), tipsEl=$("tips"), logEl=$("log");
+
+function tokenize(s){return s.toLowerCase().replace(/[^\w'\s]/g,"").split(/\s+/).filter(Boolean);}
+function diffWords(target, said){
+  const a=tokenize(target), b=tokenize(said);
+  const setB=new Set(b);
+  return a.map(w => setB.has(w) ? `<span class="good">${w}</span>` : `<span class="bad">${w}</span>`).join(" ");
+}
+function jpTips(target, said){
+  const tips=[];
+  const t=target.toLowerCase();
+  const s=said.toLowerCase();
+  // 日本人が苦手になりやすいポイントをざっくり検出
+  if (t.includes("th")) tips.push("TH：舌先を上下の歯の間に軽く出して息を出します（サ行にしない）。");
+  if (t.match(/\br\b/) || t.match(/\bl\b/)) tips.push("L/R：舌の位置が違います。Lは舌先を上前歯の裏、Rは舌を奥に丸め気味で浮かせます。");
+  if (t.match(/\b(s|es)\b/) || t.match(/\b\w+s\b/)) tips.push("語尾の子音：語尾のS/T/Kなどを落としやすいので、息だけでも出して締めます。");
+  if (t.includes("nice to") || t.includes("get started") || t.includes("could you")) tips.push("リンキング：単語を切らずに『ナイス(トゥ)』『クッジュ』のように繋げます。");
+  if (t.match(/\b(a|an|the)\b/)) tips.push("冠詞：a/an/the を抜きやすいので、短くても必ず入れます。");
+  if (!s || s.trim().length<2) tips.push("音声が取れていない可能性：マイク許可/入力デバイス/静かな環境を確認してください。");
+  return tips;
+}
+
+function loadScenes(){
+  const lvl=levelSel.value;
+  sceneSel.innerHTML="";
+  scenes.filter(x=>x.lvl.includes(lvl)).forEach(x=>{
+    const opt=document.createElement("option");
+    opt.value=x.id; opt.textContent=x.title;
+    sceneSel.appendChild(opt);
+  });
+  updateTarget();
+}
+function updateTarget(){
+  const sc=scenes.find(x=>x.id===sceneSel.value) || scenes[0];
+  targetEl.textContent="目標文： " + sc.target;
+  diffEl.innerHTML="";
+  tipsEl.innerHTML="";
+}
+levelSel.addEventListener("change", loadScenes);
+sceneSel.addEventListener("change", updateTarget);
+
+function speak(text){
+  const u=new SpeechSynthesisUtterance(text);
+  u.lang="en-US";
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
+$("tts").addEventListener("click", ()=>{
+  const sc=scenes.find(x=>x.id===sceneSel.value);
+  speak(sc.target);
+});
+
+function logUpdate(ok){
+  const key="eikaiwa_log_v1";
+  const now=new Date();
+  const today=now.toISOString().slice(0,10);
+  const data=JSON.parse(localStorage.getItem(key) || '{"today":"","todayCount":0,"total":0,"streak":0,"lastDay":""}');
+  if (data.today !== today){
+    // streak
+    if (data.lastDay){
+      const last=new Date(data.lastDay);
+      const d=(now-last)/(1000*60*60*24);
+      data.streak = (d>0.9 && d<1.9) ? (data.streak+1) : 1;
+    } else data.streak=1;
+    data.today=today;
+    data.todayCount=0;
+    data.lastDay=today;
+  }
+  data.todayCount += 1;
+  data.total += 1;
+  localStorage.setItem(key, JSON.stringify(data));
+  renderLog();
+}
+
+function renderLog(){
+  const key="eikaiwa_log_v1";
+  const data=JSON.parse(localStorage.getItem(key) || '{"today":"","todayCount":0,"total":0,"streak":0,"lastDay":""}');
+  logEl.innerHTML = `
+    <div>今日：${data.today} / 回数：${data.todayCount}</div>
+    <div>累計：${data.total}</div>
+    <div>連続日数：${data.streak}</div>
+  `;
+}
+$("reset").addEventListener("click", ()=>{
+  localStorage.removeItem("eikaiwa_log_v1");
+  renderLog();
+});
+
+let rec;
+$("rec").addEventListener("click", ()=>{
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition){
+    alert("このブラウザは音声認識に対応していません（Edge最新版で試してください）");
+    return;
+  }
+  const sc=scenes.find(x=>x.id===sceneSel.value);
+  rec = new SpeechRecognition();
+  rec.lang="en-US";
+  rec.interimResults=false;
+  rec.maxAlternatives=1;
+
+  rec.onresult=(e)=>{
+    const said=e.results[0][0].transcript;
+    diffEl.innerHTML = `<div><b>あなた：</b> ${said}</div><div style="margin-top:8px">${diffWords(sc.target, said)}</div>`;
+    const tips=jpTips(sc.target, said);
+    tipsEl.innerHTML = tips.map(t=>`<li>${t}</li>`).join("");
+    logUpdate(true);
+  };
+  rec.onerror=()=>{ tipsEl.innerHTML="<li>認識に失敗。マイク許可や入力デバイスを確認してください。</li>"; };
+  rec.start();
+});
+
+loadScenes();
+renderLog();
+</script>
+</body>
+</html>
