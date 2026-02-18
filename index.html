@@ -315,16 +315,158 @@ function highlightDiff(expected, said){
 ========================= */
 const LEVELS = ["A0","A1","A2","B1"];
 
-const SCENES = [
-  // A0/A1: daily
-  {id:"s1", level:"A0", title:"あいさつ", ja:"挨拶する", en:"Hello. Nice to meet you.", tips:"最初は“全部言う”より、止まらず言い切る。"},
-  {id:"s2", level:"A0", title:"お願い", ja:"ゆっくり話して", en:"Could you speak slowly, please?", tips:"Could you ... please? は万能型。"},
-  {id:"s3", level:"A1", title:"買い物", ja:"これください", en:"I'd like this, please.", tips:"I'd like〜 は丁寧で便利。"},
-  {id:"s4", level:"A1", title:"道案内", ja:"駅はどこ？", en:"Where is the station?", tips:"Where is + 場所？の型を定着。"},
-  // A2/B1
-  {id:"s5", level:"A2", title:"日程調整", ja:"明日は空いてますか？", en:"Are you available tomorrow?", tips:"available は“空いてる”。"},
-  {id:"s6", level:"B1", title:"依頼", ja:"今日中に確認できますか？", en:"Could you review it by the end of today?", tips:"by the end of〜 はビジネス頻出。"}
+// ===== 会話テンプレ（中学生向け）=====
+// ここを増やすだけで会話が指数的に増える
+const CONV_SLOTS = {
+  names: ["Ken","Yuki","Aki","Tomo","Sota","Mina"],
+  places: ["the library","the gym","the station","the park","the classroom","the store"],
+  times: ["after school","today","tomorrow","on Sunday","this afternoon"],
+  hobbies: ["soccer","baseball","music","anime","games","basketball"],
+  foods: ["ramen","curry","pizza","sushi","ice cream"],
+  items: ["a pen","my notebook","your phone","a dictionary","my bag"],
+  verbs: ["play","study","go","eat","watch","practice"],
+};
+
+const CONV_TEMPLATES = [
+  // 1) あいさつ＋気分
+  {
+    level:"A0", title:"あいさつ・気分",
+    turns: [
+      "A: Hi, {name}!",
+      "B: Hi! How are you?",
+      "A: I'm good. How about you?",
+      "B: I'm fine, thanks."
+    ],
+    ja:"挨拶して気分を聞く"
+  },
+
+  // 2) 好き嫌い
+  {
+    level:"A0", title:"好き嫌い",
+    turns: [
+      "A: Do you like {food}?",
+      "B: Yes, I do. / No, I don't.",
+      "A: Me too. / I don't like it."
+    ],
+    ja:"好き嫌いを話す"
+  },
+
+  // 3) 放課後の予定（can）
+  {
+    level:"A1", title:"放課後の予定",
+    turns: [
+      "A: Can you {verb} {time}?",
+      "B: Yes, I can. / Sorry, I can't.",
+      "A: Let's {verb} {place}."
+    ],
+    ja:"予定を誘う"
+  },
+
+  // 4) 道案内（Where is）
+  {
+    level:"A1", title:"場所を聞く",
+    turns: [
+      "A: Excuse me. Where is {place}?",
+      "B: It's near here.",
+      "A: Thank you!",
+      "B: You're welcome."
+    ],
+    ja:"場所をたずねる"
+  },
+
+  // 5) 忘れ物（have / lost）
+  {
+    level:"A2", title:"忘れ物",
+    turns: [
+      "A: I can't find {item}.",
+      "B: Do you have it?",
+      "A: Maybe I lost it.",
+      "B: Let's look for it."
+    ],
+    ja:"忘れ物を探す"
+  },
+
+  // 6) 週末（want to / will）
+  {
+    level:"A2", title:"週末の予定",
+    turns: [
+      "A: What do you want to do {time}?",
+      "B: I want to {verb}.",
+      "A: Sounds good. I will go with you."
+    ],
+    ja:"週末の計画"
+  },
+
+  // 7) 趣味（What do you do）
+  {
+    level:"A1", title:"趣味",
+    turns: [
+      "A: What do you do after school?",
+      "B: I {verb} {hobby}.",
+      "A: Nice! I like {hobby} too."
+    ],
+    ja:"趣味を話す"
+  },
+
+  // 8) 依頼（please）
+  {
+    level:"A1", title:"お願い",
+    turns: [
+      "A: Can you help me, please?",
+      "B: Sure. What's up?",
+      "A: Please pass me {item}.",
+      "B: Here you are."
+    ],
+    ja:"丁寧にお願いする"
+  }
 ];
+
+// ===== ここから自動生成 =====
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+function fillSlots(line){
+  return line
+    .replaceAll("{name}", pick(CONV_SLOTS.names))
+    .replaceAll("{place}", pick(CONV_SLOTS.places))
+    .replaceAll("{time}", pick(CONV_SLOTS.times))
+    .replaceAll("{hobby}", pick(CONV_SLOTS.hobbies))
+    .replaceAll("{food}", pick(CONV_SLOTS.foods))
+    .replaceAll("{item}", pick(CONV_SLOTS.items))
+    .replaceAll("{verb}", pick(CONV_SLOTS.verbs));
+}
+
+// 会話1本を「お手本英文（1文）」にまとめる（録音判定用）
+function toModelSentence(turns){
+  // A/Bのラベルを外して、短く連結（必要ならここを調整）
+  return turns.map(t => t.replace(/^A:\s*/,"").replace(/^B:\s*/,"")).join(" ");
+}
+
+// 生成数：テンプレ×バリエーション
+function generateScenes(){
+  const scenes = [];
+  let id = 1;
+  const VARIATIONS_PER_TEMPLATE = 30; // 8テンプレ×30=240本くらい
+  for(const tpl of CONV_TEMPLATES){
+    for(let i=0;i<VARIATIONS_PER_TEMPLATE;i++){
+      const filledTurns = tpl.turns.map(fillSlots);
+      scenes.push({
+        id: "c" + (id++),
+        level: tpl.level,
+        title: tpl.title,
+        ja: tpl.ja,
+        en: toModelSentence(filledTurns), // 録音判定の期待文
+        tips: "短く区切って、止まらず言い切る。",
+        // 画面にも会話を出したいなら後で turn 表示を追加する（次のステップ）
+        turns: filledTurns
+      });
+    }
+  }
+  return scenes;
+}
+
+// 既存の SCENES を上書き
+const SCENES = generateScenes();
+
 
 function drillsCommonByLevel(level){
   // 共通弱点：冠詞/前置詞/三単現/過去形
