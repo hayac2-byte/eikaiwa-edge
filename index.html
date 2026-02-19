@@ -60,9 +60,10 @@
 <header>
   <div class="row">
     <div class="title">英会話練習（Edge無料MVP）</div>
-    <span class="badge" id="ver">v2.0</span>
+    <span class="badge" id="ver">v2.1</span>
     <span class="badge">無料 / ブラウザ音声</span>
     <span class="badge">学習管理つき</span>
+    <span class="badge">会話=1文ずつ</span>
   </div>
   <div class="row" style="margin-top:10px">
     <div class="pill">
@@ -119,6 +120,7 @@
 ========================= */
 const APP_KEY = "eikaiwa_edge_v2";
 const todayKey = () => new Date().toISOString().slice(0,10);
+const LEVELS = ["A0","A1","A2","B1"]; // ★1回だけに統一
 
 function loadState(){
   const raw = localStorage.getItem(APP_KEY);
@@ -147,7 +149,6 @@ function bumpToday(){
   const d = todayKey();
   if(STATE.today.day !== d){ STATE.today = {day:d,count:0}; }
   STATE.today.count++;
-  // streak
   const last = STATE.streak.lastDay;
   if(!last){
     STATE.streak = { lastDay:d, count:1 };
@@ -156,7 +157,6 @@ function bumpToday(){
     const now = new Date(d);
     const diffDays = Math.round((now - lastDate)/(1000*60*60*24));
     if(diffDays === 0){
-      // same day
     }else if(diffDays === 1){
       STATE.streak = { lastDay:d, count: STATE.streak.count + 1 };
     }else{
@@ -176,7 +176,6 @@ function addWeak(tag, delta){
   if(!tag) return;
   if(!STATE.weak[tag]) STATE.weak[tag] = 0;
   STATE.weak[tag] += delta;
-  // clamp
   STATE.weak[tag] = Math.max(-50, Math.min(50, STATE.weak[tag]));
   saveState(STATE);
 }
@@ -205,13 +204,11 @@ function pct(n,d){ if(!d) return "0%"; return Math.round((n/d)*100)+"%"; }
    1) Japanese-learner feedback rules
 ========================= */
 function japaneseWeaknessFeedback(expected, said){
-  // expected/said are strings
   const exp = normText(expected);
   const got = normText(said);
   const expTok = tokens(exp);
   const gotTok = tokens(got);
 
-  // Simple diff counts
   const expSet = new Map();
   expTok.forEach(w => expSet.set(w, (expSet.get(w)||0)+1));
   const gotSet = new Map();
@@ -228,10 +225,8 @@ function japaneseWeaknessFeedback(expected, said){
     if(e < c) extra.push(w);
   });
 
-  // Japanese-learner common grammar checks (very lightweight heuristics)
   const tips = [];
 
-  // Articles a/the
   const hasArticle = expTok.some(w=>["a","an","the"].includes(w));
   if(hasArticle){
     const missArticle = ["a","an","the"].filter(a=>expTok.includes(a) && !gotTok.includes(a));
@@ -240,7 +235,6 @@ function japaneseWeaknessFeedback(expected, said){
     }
   }
 
-  // Prepositions
   const preps = ["in","on","at","to","for","from","with","by","of","about","into","over","under","between","before","after"];
   const expPreps = preps.filter(p=>expTok.includes(p));
   const missPreps = expPreps.filter(p=>!gotTok.includes(p));
@@ -248,7 +242,6 @@ function japaneseWeaknessFeedback(expected, said){
     tips.push({ tag:"前置詞", text:`前置詞が抜けやすいです。「${missPreps.join(", ")}」を意識して、前置詞を“短く弱く”入れてみてください。` });
   }
 
-  // 3rd person -s (heuristic): expects endswith s but got base
   const thirdPairs = [
     ["goes","go"],["does","do"],["has","have"],["likes","like"],["needs","need"],["wants","want"],["works","work"],["plays","play"]
   ];
@@ -258,7 +251,6 @@ function japaneseWeaknessFeedback(expected, said){
     }
   });
 
-  // past -ed (heuristic)
   const edPairs = [["worked","work"],["played","play"],["needed","need"],["wanted","want"],["called","call"],["asked","ask"],["helped","help"],["checked","check"]];
   edPairs.forEach(([ed, base])=>{
     if(expTok.includes(ed) && gotTok.includes(base) && !gotTok.includes(ed)){
@@ -266,7 +258,6 @@ function japaneseWeaknessFeedback(expected, said){
     }
   });
 
-  // R/L, TH are phonetic; with free STT we can't reliably detect. Keep practice guidance:
   if(exp.includes("l") || exp.includes("r")){
     tips.push({ tag:"発音", text:`発音のコツ：Rは舌をどこにも付けず奥で丸める、Lは舌先を上の歯茎に“当てる”。（聞き分けより“作り分け”が先です）` });
   }
@@ -274,7 +265,6 @@ function japaneseWeaknessFeedback(expected, said){
     tips.push({ tag:"発音", text:`THのコツ：舌先を上下の歯の間に少し出して息を抜く（think）。濁る版は this。` });
   }
 
-  // Score: overlap ratio
   const common = expTok.filter(w => gotSet.get(w));
   const score = expTok.length ? Math.round((common.length / expTok.length)*100) : 0;
 
@@ -288,7 +278,6 @@ function highlightDiff(expected, said){
   const gotCount = new Map();
   gotTok.forEach(w=>gotCount.set(w,(gotCount.get(w)||0)+1));
 
-  // mark expected tokens: ok if exists in gotCount (consume)
   const marks = [];
   expTok.forEach(w=>{
     const c = gotCount.get(w)||0;
@@ -300,7 +289,6 @@ function highlightDiff(expected, said){
     }
   });
 
-  // extra tokens: those remaining in gotCount >0
   const extra = [];
   gotCount.forEach((c,w)=>{ for(let i=0;i<c;i++) extra.push(w); });
 
@@ -310,167 +298,150 @@ function highlightDiff(expected, said){
 }
 
 /* =========================
-   2) Content (scenes + drills)
-   - For scale: add later. For now: curated + level mapping.
+   2) Talk content generator (NO "/")
+   - 1 sentence per turn
+   - ~300 scenes
 ========================= */
-const LEVELS = ["A0","A1","A2","B1"];
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 
-// ===== 会話テンプレ（中学生向け）=====
-// ここを増やすだけで会話が指数的に増える
+function splitToPracticeSentences(text){
+  const t = (text || "").trim();
+  if(!t) return [];
+  let parts = t
+    .replace(/\s+/g," ")
+    .split(/(?<=[\.\?\!])\s+/)
+    .map(s=>s.trim())
+    .filter(Boolean);
+
+  const out = [];
+  for(const p of parts){
+    if(p.length <= 70){ out.push(p); continue; }
+    const sub = p.split(/(?<=[,;:])\s+/).map(s=>s.trim()).filter(Boolean);
+    out.push(...sub);
+  }
+  return out;
+}
+
 const CONV_SLOTS = {
-  names: ["Ken","Yuki","Aki","Tomo","Sota","Mina"],
-  places: ["the library","the gym","the station","the park","the classroom","the store"],
-  times: ["after school","today","tomorrow","on Sunday","this afternoon"],
-  hobbies: ["soccer","baseball","music","anime","games","basketball"],
-  foods: ["ramen","curry","pizza","sushi","ice cream"],
-  items: ["a pen","my notebook","your phone","a dictionary","my bag"],
-  verbs: ["play","study","go","eat","watch","practice"],
+  name: ["Sota","Yui","Haruto","Mina","Riku","Aoi"],
+  food: ["curry","ramen","pizza","sushi","pasta","fried chicken","salad"],
+  drink: ["water","tea","milk","juice","coffee","sports drink"],
+  hobby: ["soccer","baseball","basketball","tennis","music","games","reading","drawing"],
+  place: ["school","home","library","park","station","convenience store"],
+  day: ["today","tomorrow","this weekend","on Monday","on Saturday"],
+  time: ["after school","at 7 p.m.","in the morning","after dinner"],
+  feeling: ["good","great","fine","tired","sleepy","hungry"],
+  weather: ["sunny","rainy","cloudy","windy","hot","cold"],
+  subject: ["math","English","science","PE","history","music"],
+  yn_do: ["Yes, I do.", "No, I don't."],
+  me_too: ["Me too.", "Me neither.", "I like it too.", "I don't like it."],
+  thanks: ["Thanks.", "Thank you.", "Thanks a lot."],
+  ok: ["OK.", "Sure.", "No problem."],
 };
 
+function fillSlots(line){
+  return (line || "")
+    .replaceAll("{NAME}", pick(CONV_SLOTS.name))
+    .replaceAll("{FOOD}", pick(CONV_SLOTS.food))
+    .replaceAll("{DRINK}", pick(CONV_SLOTS.drink))
+    .replaceAll("{HOBBY}", pick(CONV_SLOTS.hobby))
+    .replaceAll("{PLACE}", pick(CONV_SLOTS.place))
+    .replaceAll("{DAY}", pick(CONV_SLOTS.day))
+    .replaceAll("{TIME}", pick(CONV_SLOTS.time))
+    .replaceAll("{FEEL}", pick(CONV_SLOTS.feeling))
+    .replaceAll("{WEATHER}", pick(CONV_SLOTS.weather))
+    .replaceAll("{SUBJECT}", pick(CONV_SLOTS.subject))
+    .replaceAll("{YN_DO}", pick(CONV_SLOTS.yn_do))
+    .replaceAll("{ME_TOO}", pick(CONV_SLOTS.me_too))
+    .replaceAll("{THANKS}", pick(CONV_SLOTS.thanks))
+    .replaceAll("{OK}", pick(CONV_SLOTS.ok));
+}
+
 const CONV_TEMPLATES = [
-  // 1) あいさつ＋気分
-  {
-    level:"A0", title:"あいさつ・気分",
-    turns: [
-      "A: Hi, {name}!",
-      "B: Hi! How are you?",
-      "A: I'm good. How about you?",
-      "B: I'm fine, thanks."
-    ],
-    ja:"挨拶して気分を聞く"
+  { level:"A0", title:"あいさつ・気分", ja:"挨拶して気分を聞く",
+    lines:["Hi, {NAME}!","Hi!","How are you?","I'm {FEEL}.","How about you?","I'm {FEEL}, {THANKS}"],
+    tips:"短く区切って、止まらず言い切る。"
   },
-
-  // 2) 好き嫌い
-  {
-    level:"A0", title:"好き嫌い",
-    turns: [
-      "A: Do you like {food}?",
-      "B: Yes, I do. / No, I don't.",
-      "A: Me too. / I don't like it."
-    ],
-    ja:"好き嫌いを話す"
+  { level:"A0", title:"好き嫌い", ja:"好きかどうか聞く",
+    lines:["Do you like {FOOD}?","{YN_DO}","{ME_TOO}"],
+    tips:"Do you like ...? → Yes/No を一息で。"
   },
-
-  // 3) 放課後の予定（can）
-  {
-    level:"A1", title:"放課後の予定",
-    turns: [
-      "A: Can you {verb} {time}?",
-      "B: Yes, I can. / Sorry, I can't.",
-      "A: Let's {verb} {place}."
-    ],
-    ja:"予定を誘う"
+  { level:"A1", title:"放課後の予定", ja:"放課後の予定を言う",
+    lines:["What are you doing {TIME}?","I'm going to {PLACE}.","Do you want to come with me?","Yes, I'd love to.","{OK}"],
+    tips:"I'm going to ... を型で覚える。"
   },
-
-  // 4) 道案内（Where is）
-  {
-    level:"A1", title:"場所を聞く",
-    turns: [
-      "A: Excuse me. Where is {place}?",
-      "B: It's near here.",
-      "A: Thank you!",
-      "B: You're welcome."
-    ],
-    ja:"場所をたずねる"
+  { level:"A1", title:"教科", ja:"好きな教科を言う",
+    lines:["What's your favorite subject?","I like {SUBJECT}.","Why?","Because it's fun.","Nice!"],
+    tips:"Because で理由を足す練習。"
   },
-
-  // 5) 忘れ物（have / lost）
-  {
-    level:"A2", title:"忘れ物",
-    turns: [
-      "A: I can't find {item}.",
-      "B: Do you have it?",
-      "A: Maybe I lost it.",
-      "B: Let's look for it."
-    ],
-    ja:"忘れ物を探す"
+  { level:"A1", title:"天気", ja:"天気の話をする",
+    lines:["How's the weather today?","It's {WEATHER}.","I like {WEATHER} weather.","Me too."],
+    tips:"It's ... の一文を明確に。"
   },
-
-  // 6) 週末（want to / will）
-  {
-    level:"A2", title:"週末の予定",
-    turns: [
-      "A: What do you want to do {time}?",
-      "B: I want to {verb}.",
-      "A: Sounds good. I will go with you."
-    ],
-    ja:"週末の計画"
+  { level:"A2", title:"誘い（日時つき）", ja:"日時を指定して誘う",
+    lines:["Are you free {DAY}?","Yes, I'm free.","Let's play {HOBBY} {TIME}.","Sounds good!","See you then."],
+    tips:"Are you free ...? のリズムを作る。"
   },
-
-  // 7) 趣味（What do you do）
-  {
-    level:"A1", title:"趣味",
-    turns: [
-      "A: What do you do after school?",
-      "B: I {verb} {hobby}.",
-      "A: Nice! I like {hobby} too."
-    ],
-    ja:"趣味を話す"
+  { level:"A2", title:"お願い", ja:"丁寧にお願いする",
+    lines:["Could you help me?","Sure.","Could you explain this problem?","Of course.","{THANKS}"],
+    tips:"Could you ...? は丁寧で万能。"
   },
-
-  // 8) 依頼（please）
-  {
-    level:"A1", title:"お願い",
-    turns: [
-      "A: Can you help me, please?",
-      "B: Sure. What's up?",
-      "A: Please pass me {item}.",
-      "B: Here you are."
-    ],
-    ja:"丁寧にお願いする"
+  { level:"B1", title:"提案", ja:"提案して同意を取る",
+    lines:["Why don't we study {SUBJECT} together?","That's a good idea.","Let's meet at the library {DAY}.","Great.","See you!"],
+    tips:"Why don't we ...? は“提案”。"
   }
 ];
 
-// ===== ここから自動生成 =====
-function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
-
-function fillSlots(line){
-  return line
-    .replaceAll("{name}", pick(CONV_SLOTS.names))
-    .replaceAll("{place}", pick(CONV_SLOTS.places))
-    .replaceAll("{time}", pick(CONV_SLOTS.times))
-    .replaceAll("{hobby}", pick(CONV_SLOTS.hobbies))
-    .replaceAll("{food}", pick(CONV_SLOTS.foods))
-    .replaceAll("{item}", pick(CONV_SLOTS.items))
-    .replaceAll("{verb}", pick(CONV_SLOTS.verbs));
+function templatesUpTo(level){
+  const idx = LEVELS.indexOf(level);
+  return CONV_TEMPLATES.filter(t => LEVELS.indexOf(t.level) <= idx);
 }
 
-// 会話1本を「お手本英文（1文）」にまとめる（録音判定用）
-function toModelSentence(turns){
-  // A/Bのラベルを外して、短く連結（必要ならここを調整）
-  return turns.map(t => t.replace(/^A:\s*/,"").replace(/^B:\s*/,"")).join(" ");
-}
-
-// 生成数：テンプレ×バリエーション
-function generateScenes(){
+function buildConversationScenes(level, total=300){
+  const tpls = templatesUpTo(level);
   const scenes = [];
   let id = 1;
-  const VARIATIONS_PER_TEMPLATE = 30; // 8テンプレ×30=240本くらい
-  for(const tpl of CONV_TEMPLATES){
-    for(let i=0;i<VARIATIONS_PER_TEMPLATE;i++){
-      const filledTurns = tpl.turns.map(fillSlots);
-      scenes.push({
-        id: "c" + (id++),
-        level: tpl.level,
-        title: tpl.title,
-        ja: tpl.ja,
-        en: toModelSentence(filledTurns), // 録音判定の期待文
-        tips: "短く区切って、止まらず言い切る。",
-        // 画面にも会話を出したいなら後で turn 表示を追加する（次のステップ）
-        turns: filledTurns
-      });
-    }
+  while(scenes.length < total){
+    const tpl = pick(tpls);
+    const filled = tpl.lines.map(line => fillSlots(line));
+    const turns = [];
+    for(const line of filled) turns.push(...splitToPracticeSentences(line));
+    scenes.push({
+      id: `cv_${level}_${id++}`,
+      level,
+      title: tpl.title,
+      ja: tpl.ja,
+      tips: tpl.tips,
+      type: "conv",
+      turns,
+      turnIndex: 0,
+      en: turns[0] || ""
+    });
   }
   return scenes;
 }
 
-// 既存の SCENES を上書き
-const SCENES = generateScenes();
+function convAdvance(scene){
+  if(!scene || scene.type !== "conv" || !Array.isArray(scene.turns)) return;
+  scene.turnIndex = (scene.turnIndex ?? 0) + 1;
+  if(scene.turnIndex >= scene.turns.length) scene.turnIndex = 0;
+  scene.en = scene.turns[scene.turnIndex] || "";
+}
+function convNormalizeEn(scene){
+  if(!scene || scene.type !== "conv") return;
+  if(typeof scene.en !== "string") scene.en = "";
+  if(scene.en.includes("/")){
+    const alts = scene.en.split("/").map(s=>s.trim()).filter(Boolean);
+    scene.en = alts.length ? pick(alts) : scene.en.replaceAll("/"," ");
+  }
+  const one = splitToPracticeSentences(scene.en)[0];
+  if(one) scene.en = one;
+}
 
-
+/* =========================
+   2b) Drills
+========================= */
 function drillsCommonByLevel(level){
-  // 共通弱点：冠詞/前置詞/三単現/過去形
-  // 形式：MCQ（穴埋め）
   const base = [
     {id:"c_a_1", level:"A0", type:"mcq", tag:"冠詞", q:"I have ___ apple.", a:"an", c:["a","an","the","(no article)"], explain:"母音（a,e,i,o,u）で始まる単語の前は an が基本。"},
     {id:"c_p_1", level:"A0", type:"mcq", tag:"前置詞", q:"I'm ___ Tokyo.", a:"in", c:["in","on","at","to"], explain:"都市・国など“範囲”は in。"},
@@ -482,13 +453,11 @@ function drillsCommonByLevel(level){
     {id:"c_3s_2", level:"A2", type:"mcq", tag:"三単現", q:"She ___ a car.", a:"has", c:["have","has","having","had"], explain:"have の三単現は has。"},
     {id:"c_ed_2", level:"B1", type:"mcq", tag:"過去形", q:"We ___ the report by noon.", a:"finished", c:["finish","finished","finishing","finishes"], explain:"by + 時刻 の前に完了した、を示すなら過去形が自然。"}
   ];
-  // filter by <= level
   const idx = LEVELS.indexOf(level);
   return base.filter(d => LEVELS.indexOf(d.level) <= idx);
 }
 
 const DRILLS_EIKEN = [
-  // 英検っぽい：並べ替え＋穴埋め（短文）
   {id:"e1", level:"A1", type:"reorder", tag:"英検_語順", q:"（並べ替え）「私はあなたを手伝えます。」", words:["can","I","help","you"], a:"I can help you", explain:"助動詞 can は主語の後。"},
   {id:"e2", level:"A2", type:"reorder", tag:"英検_語順", q:"（並べ替え）「彼は昨日学校へ行きました。」", words:["went","to","school","he","yesterday"], a:"He went to school yesterday", explain:"基本：主語→動詞→目的語→時間。"},
   {id:"e3", level:"A2", type:"mcq", tag:"英検_穴埋め", q:"She is good ___ math.", a:"at", c:["in","on","at","to"], explain:"be good at 〜 が型。"},
@@ -496,7 +465,6 @@ const DRILLS_EIKEN = [
 ];
 
 const DRILLS_TOEIC = [
-  // TOEIC Part5風：文法・品詞
   {id:"t1", level:"A1", type:"mcq", tag:"TOEIC_P5", q:"The manager will ___ the schedule tomorrow.", a:"review", c:["review","reviews","reviewed","reviewing"], explain:"will の後は動詞の原形。"},
   {id:"t2", level:"A2", type:"mcq", tag:"TOEIC_P5", q:"Please submit the form ___ Friday.", a:"by", c:["by","in","on","at"], explain:"締切は by。"},
   {id:"t3", level:"A2", type:"mcq", tag:"TOEIC_P5", q:"We are ___ to announce the new product.", a:"pleased", c:["please","pleased","pleasing","pleasure"], explain:"be pleased to 〜（形容詞）。"},
@@ -533,20 +501,19 @@ function createRecognizer(){
 ========================= */
 const TABS = [
   { key:"talk", label:"会話練習" },
-  { key:"common", label:"共通ドリル" },   // 3
-  { key:"eiken", label:"英検" },          // 2
-  { key:"toeic", label:"TOEIC P5" },      // 1
+  { key:"common", label:"共通ドリル" },
+  { key:"eiken", label:"英検" },
+  { key:"toeic", label:"TOEIC P5" },
   { key:"custom", label:"オリジナル問題" }
 ];
 
-let ACTIVE = "common"; // start from common drills
-let CURRENT = { drill:null, scene:null };
+let ACTIVE = "talk";
+let CURRENT = { drill:null, scene:null, talkPool:null };
 
 const elTabs = document.getElementById("tabs");
 const elLeft = document.getElementById("left");
 const elLevel = document.getElementById("levelSel");
 
-// restore last level
 const savedLevel = localStorage.getItem(APP_KEY+"_level");
 if(savedLevel && LEVELS.includes(savedLevel)) elLevel.value = savedLevel;
 
@@ -562,16 +529,14 @@ function renderTabs(){
 }
 
 function renderStats(){
-  // today
   const d = todayKey();
   if(STATE.today.day !== d){ STATE.today = {day:d,count:0}; saveState(STATE); }
   document.getElementById("k_today").textContent = STATE.today.count;
   document.getElementById("k_acc").textContent = pct(STATE.stats.drillCorrect, STATE.stats.drillTotal);
   document.getElementById("k_streak").textContent = STATE.streak.count;
 
-  // weak tags
   const entries = Object.entries(STATE.weak)
-    .sort((a,b)=> a[1]-b[1]) // lower = weaker
+    .sort((a,b)=> a[1]-b[1])
     .slice(0,8);
 
   const wrap = document.getElementById("weakTags");
@@ -583,7 +548,6 @@ function renderStats(){
     wrap.appendChild(s);
   });
 
-  // history
   const h = document.getElementById("history");
   if(!STATE.history.length){
     h.innerHTML = `<span class="muted">まだありません</span>`;
@@ -603,25 +567,31 @@ function levelFilter(items){
 }
 
 /* =========================
-   5) Renders: Talk
+   5) Talk (no SCENES, generate pool)
 ========================= */
-function pickScene(){
+function getTalkPool(){
   const lv = elLevel.value;
-  const pool = levelFilter(SCENES);
-  // prefer near level
-  const idx = LEVELS.indexOf(lv);
-  const near = pool.filter(s => Math.abs(LEVELS.indexOf(s.level)-idx) <= 1);
-  const p = near.length ? near : pool;
-  return p[Math.floor(Math.random()*p.length)];
+  // レベルで生成。毎回生成すると重いのでキャッシュ
+  if(!CURRENT.talkPool || CURRENT.talkPoolLevel !== lv){
+    CURRENT.talkPool = buildConversationScenes(lv, 300);
+    CURRENT.talkPoolLevel = lv;
+  }
+  return CURRENT.talkPool;
+}
+
+function pickScene(){
+  const pool = getTalkPool();
+  return pool[Math.floor(Math.random()*pool.length)];
 }
 
 function renderTalk(){
   const scene = CURRENT.scene || pickScene();
   CURRENT.scene = scene;
+  convNormalizeEn(scene); // 念のため 1文化
 
   elLeft.innerHTML = `
     <div class="h2">会話練習（お手本 → 録音 → 差分 → 日本語フィードバック）</div>
-    <div class="muted">日本人がつまずきやすい「冠詞/前置詞/三単現/過去形」も自動でコメントします。</div>
+    <div class="muted">会話は「1文ずつ」練習。録音して判定すると自動で次の文に進みます。</div>
     <div class="divider"></div>
 
     <div class="qbox">
@@ -633,14 +603,15 @@ function renderTalk(){
         <button class="primary" id="nextScene">別シーン</button>
       </div>
       <div class="divider"></div>
-      <div class="h3">お手本（英語）</div>
+
+      <div class="h3">お手本（英語：1文）</div>
       <div style="font-size:18px;font-weight:800">${escapeHtml(scene.en)}</div>
       <div class="muted">${escapeHtml(scene.tips||"")}</div>
 
       <div class="divider"></div>
       <div class="row">
         <button class="primary" id="btnSpeak">🔊 お手本を聞く</button>
-        <button class="ok" id="btnRec">🎙️ 録音して判定</button>
+        <button class="ok" id="btnRec">🎙️ 録音して判定（次の文へ）</button>
       </div>
 
       <div class="divider"></div>
@@ -653,6 +624,9 @@ function renderTalk(){
       <div class="divider"></div>
       <div class="h3">日本語フィードバック</div>
       <div id="fb" class="muted"></div>
+
+      <div class="divider"></div>
+      <div class="muted small">進捗：<b>${(scene.turnIndex||0)+1}</b> / ${scene.turns?.length||1} 文</div>
     </div>
   `;
 
@@ -668,7 +642,7 @@ function renderTalk(){
       alert("このブラウザは音声認識に対応していません。");
       return;
     }
-    bumpToday(); // count attempt
+    bumpToday();
     renderStats();
 
     const btn = document.getElementById("btnRec");
@@ -688,43 +662,42 @@ function renderTalk(){
       if(fb.extra.length) lines.push(`余分に聞こえた語：<b>${fb.extra.join(", ")}</b>`);
       if(!fb.missing.length && !fb.extra.length) lines.push("かなり近いです。次はスピードを少し上げて“つながり”を意識。");
 
-      // tips and weak tags
       if(fb.tips.length){
         lines.push("<br><b>日本人向けの指摘：</b>");
         fb.tips.forEach(t=>{
           lines.push(`• ${escapeHtml(t.text)}`);
-          // if missing triggers, treat as weak
           if(t.tag) addWeak(t.tag, -2);
         });
       }
-
       document.getElementById("fb").innerHTML = lines.join("<br>");
 
       addHistory({ type:"talk", title:`会話:${scene.title}`, ok:null });
       saveState(STATE);
       renderStats();
 
-      btn.disabled = false;
-      btn.textContent = "🎙️ 録音して判定";
+      // ★ここが「3が見つからない」問題の解決：結果の後に自動で次の1文へ
+      convAdvance(scene);
+      convNormalizeEn(scene);
+      renderTalk();
     };
 
     rec.onerror = ()=>{
       btn.disabled = false;
-      btn.textContent = "🎙️ 録音して判定";
+      btn.textContent = "🎙️ 録音して判定（次の文へ）";
       document.getElementById("fb").innerHTML = "音声認識でエラーになりました。Edgeの🔒からマイク許可を確認してください。";
     };
 
     rec.onend = ()=>{
       btn.disabled = false;
-      btn.textContent = "🎙️ 録音して判定";
+      btn.textContent = "🎙️ 録音して判定（次の文へ）";
     };
 
-    try { rec.start(); } catch { btn.disabled=false; btn.textContent="🎙️ 録音して判定"; }
+    try { rec.start(); } catch { btn.disabled=false; btn.textContent="🎙️ 録音して判定（次の文へ）"; }
   };
 }
 
 /* =========================
-   6) Renders: Drills (MCQ / Reorder)
+   6) Drills (MCQ / Reorder)
 ========================= */
 function pickDrill(mode){
   const lv = elLevel.value;
@@ -747,7 +720,6 @@ function markAnswer(ok, drill){
   if(drill && drill.type){
     STATE.stats.drillTotal++;
     if(ok) STATE.stats.drillCorrect++;
-    // weak tag scoring
     addWeak(drill.tag, ok ? +1 : -3);
     addHistory({ type: drill.tag || drill.type, title: drill.id, ok });
     saveState(STATE);
@@ -787,12 +759,10 @@ function renderMCQ(drill, modeTitle){
     div.className = "choice";
     div.textContent = ch;
     div.onclick = ()=>{
-      // lock
       [...choices.children].forEach(x=>x.onclick=null);
 
       const ok = (ch === drill.a);
       div.classList.add(ok ? "correct" : "wrong");
-      // highlight correct
       [...choices.children].forEach(x=>{
         if(x.textContent === drill.a) x.classList.add("correct");
       });
@@ -809,10 +779,9 @@ function renderMCQ(drill, modeTitle){
 }
 
 function renderReorder(drill, modeTitle){
-  // user clicks words to build answer
   elLeft.innerHTML = `
     <div class="h2">${escapeHtml(modeTitle)}</div>
-    <div class="muted">語順（並べ替え）。日本人は語順が“日本語のまま”になりやすいので、型で矯正します。</div>
+    <div class="muted">語順（並べ替え）。型で矯正します。</div>
     <div class="divider"></div>
 
     <div class="qbox">
@@ -851,7 +820,6 @@ function renderReorder(drill, modeTitle){
   const ansBox = document.getElementById("ansBox");
   let selected = [];
 
-  // shuffle
   const words = drill.words.slice().sort(()=>Math.random()-0.5);
   words.forEach(w=>{
     const b = document.createElement("button");
@@ -879,7 +847,6 @@ function renderReorder(drill, modeTitle){
     ansBox.innerHTML = ok
       ? `<span class="hl-ok">${escapeHtml(user || "(空)")}</span>`
       : `<span class="hl-ng">${escapeHtml(user || "(空)")}</span>`;
-
     document.getElementById("exp").textContent = drill.explain || "";
     markAnswer(ok, drill);
   };
@@ -911,7 +878,7 @@ function renderDrill(mode){
   }
   if(d.type==="mcq") renderMCQ(d, titles[mode]);
   else if(d.type==="reorder") renderReorder(d, titles[mode]);
-  else renderMCQ(d, titles[mode]); // fallback
+  else renderMCQ(d, titles[mode]);
 }
 
 /* =========================
@@ -920,7 +887,6 @@ function renderDrill(mode){
 function renderCustom(){
   renderDrill("custom");
 
-  // Append editor under the drill card
   const editor = document.createElement("div");
   editor.className = "divider";
   elLeft.appendChild(editor);
@@ -957,7 +923,6 @@ function renderCustom(){
       const arr = JSON.parse(document.getElementById("customJson").value);
       if(!Array.isArray(arr)) throw new Error("JSONは配列である必要があります。");
 
-      // validate minimal fields
       arr.forEach((d,i)=>{
         if(!d.id) d.id = `user_${Date.now()}_${i}`;
         if(!d.type) throw new Error("type が必要（mcq / reorder）");
@@ -975,7 +940,6 @@ function renderCustom(){
       saveState(STATE);
       msg.textContent = `追加しました（合計 ${STATE.custom.drills.length} 問）。`;
       renderStats();
-      // next custom question
       CURRENT.drill = pickDrill("custom");
     }catch(e){
       msg.textContent = "エラー：" + (e?.message || e);
@@ -998,7 +962,7 @@ function renderLeft(){
   else if(ACTIVE==="eiken") renderDrill("eiken");
   else if(ACTIVE==="toeic") renderDrill("toeic");
   else if(ACTIVE==="custom") renderCustom();
-  else renderDrill("common");
+  else renderTalk();
 }
 
 renderTabs();
@@ -1007,7 +971,7 @@ renderStats();
 
 elLevel.onchange = ()=>{
   localStorage.setItem(APP_KEY+"_level", elLevel.value);
-  CURRENT = { drill:null, scene:null };
+  CURRENT = { drill:null, scene:null, talkPool:null };
   renderLeft();
 };
 
