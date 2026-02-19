@@ -322,36 +322,62 @@ function splitToPracticeSentences(text){
   return out;
 }
 
+// ランダム取得
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+// 文章を「練習用の1文」に分割（? ! . を優先、長文は , ; : でも切る）
+function splitToPracticeSentences(text){
+  const t = (text || "").trim();
+  if(!t) return [];
+  let parts = t
+    .replace(/\s+/g," ")
+    .split(/(?<=[\.\?\!])\s+/)
+    .map(s=>s.trim())
+    .filter(Boolean);
+
+  const out = [];
+  for(const p of parts){
+    if(p.length <= 70){ out.push(p); continue; }
+    const sub = p.split(/(?<=[,;:])\s+/).map(s=>s.trim()).filter(Boolean);
+    out.push(...sub);
+  }
+  return out;
+}
+
+/* -------------------------
+   会話：分岐あり（相手返答を選ぶ→次の文が変わる）
+------------------------- */
+
 const CONV_SLOTS = {
-  name: ["Sota","Yui","Haruto","Mina","Riku","Aoi","Kenta","Sara","Ren","Hana"],
+  name: ["Sota","Yui","Haruto","Mina","Riku","Aoi","Kenta","Sara","Ren","Hana","Daiki","Rio"],
+  friend: ["my friend","my sister","my brother","my classmate","my teammate"],
   food: ["curry","ramen","pizza","sushi","pasta","fried chicken","salad","sandwich","rice ball","pancakes","ice cream"],
   drink: ["water","tea","milk","juice","coffee","sports drink","hot chocolate"],
   hobby: ["soccer","baseball","basketball","tennis","music","games","reading","drawing","cooking","dancing"],
   place: ["school","home","library","park","station","convenience store","shopping mall","cafe","gym","classroom"],
   day: ["today","tomorrow","this weekend","on Monday","on Tuesday","on Friday","on Saturday","next week"],
-  time: ["after school","at 7 p.m.","in the morning","after dinner","at lunch","before class","after practice"],
-  feeling: ["good","great","fine","tired","sleepy","hungry","excited","nervous","a bit sick"],
+  time: ["after school","at 7 p.m.","in the morning","after dinner","at lunch","before class","after practice","after club"],
+  feeling: ["good","great","fine","tired","sleepy","hungry","excited","nervous","a bit sick","stressed"],
   weather: ["sunny","rainy","cloudy","windy","hot","cold","humid","snowy"],
   subject: ["math","English","science","PE","history","music","art","technology","Japanese"],
-  // 追加スロット（会話を伸ばす）
-  activity: ["study","practice","hang out","go shopping","watch a movie","play games","do homework","clean my room"],
-  reason: ["I have a test","I have practice","I'm busy","I'm free","I'm not feeling well","I promised my family"],
+  activity: ["study","practice","hang out","go shopping","watch a movie","play games","do homework","clean my room","take a rest"],
+  reason: ["I have a test","I have practice","I'm busy","I'm free","I'm not feeling well","I promised my family","I have a lesson"],
   transport: ["by train","by bus","on foot","by bike","by car"],
   minutes: ["5","10","15","20","30"],
-  // 分岐（/禁止なので配列で）
   yn_do: ["Yes, I do.", "No, I don't."],
   yn_can: ["Yes, I can.", "No, I can't."],
   yn_are: ["Yes, I am.", "No, I'm not."],
-  me_too: ["Me too.", "Me neither.", "I do too.", "I don't."],
   thanks: ["Thanks.", "Thank you.", "Thanks a lot.", "I appreciate it."],
   ok: ["OK.", "Sure.", "No problem.", "All right.", "Got it."],
   sorry: ["Sorry.", "I'm sorry.", "Sorry about that."],
+  react_pos: ["Nice!", "Great!", "Awesome!", "Cool!", "Sounds good!"],
+  react_neg: ["Oh no.", "That's tough.", "I see.", "Hmm..."],
 };
-
 
 function fillSlots(line){
   return (line || "")
     .replaceAll("{NAME}", pick(CONV_SLOTS.name))
+    .replaceAll("{FRIEND}", pick(CONV_SLOTS.friend))
     .replaceAll("{FOOD}", pick(CONV_SLOTS.food))
     .replaceAll("{DRINK}", pick(CONV_SLOTS.drink))
     .replaceAll("{HOBBY}", pick(CONV_SLOTS.hobby))
@@ -361,362 +387,293 @@ function fillSlots(line){
     .replaceAll("{FEEL}", pick(CONV_SLOTS.feeling))
     .replaceAll("{WEATHER}", pick(CONV_SLOTS.weather))
     .replaceAll("{SUBJECT}", pick(CONV_SLOTS.subject))
+    .replaceAll("{ACT}", pick(CONV_SLOTS.activity))
+    .replaceAll("{REASON}", pick(CONV_SLOTS.reason))
+    .replaceAll("{TRANS}", pick(CONV_SLOTS.transport))
+    .replaceAll("{MIN}", pick(CONV_SLOTS.minutes))
     .replaceAll("{YN_DO}", pick(CONV_SLOTS.yn_do))
-    .replaceAll("{ME_TOO}", pick(CONV_SLOTS.me_too))
+    .replaceAll("{YN_CAN}", pick(CONV_SLOTS.yn_can))
+    .replaceAll("{YN_ARE}", pick(CONV_SLOTS.yn_are))
     .replaceAll("{THANKS}", pick(CONV_SLOTS.thanks))
-    .replaceAll("{OK}", pick(CONV_SLOTS.ok));
+    .replaceAll("{OK}", pick(CONV_SLOTS.ok))
+    .replaceAll("{SORRY}", pick(CONV_SLOTS.sorry))
+    .replaceAll("{POS}", pick(CONV_SLOTS.react_pos))
+    .replaceAll("{NEG}", pick(CONV_SLOTS.react_neg));
 }
 
-const CONV_TEMPLATES = [
-  /* ======================
-     A0（超基礎：短め→少し長め）
-  ====================== */
-  {
-    level:"A0", title:"あいさつフル", ja:"挨拶→名前→調子→締め",
-    lines:[
-      "Hi, {NAME}!",
-      "Hi!",
-      "How are you?",
-      "I'm {FEEL}.",
-      "How about you?",
-      "I'm {FEEL}, {THANKS}",
-      "See you later.",
-      "See you."
-    ],
-    tips:"最初は“速さ”より“止まらない”が勝ち。"
-  },
-  {
-    level:"A0", title:"好き嫌い深掘り", ja:"好き→理由→相手へ返す",
-    lines:[
-      "Do you like {FOOD}?",
-      "{YN_DO}",
-      "Why?",
-      "Because it's tasty.",
-      "How about you?",
-      "{YN_DO}",
-      "{ME_TOO}"
-    ],
-    tips:"Do you like…?→Yes/No→Because… の3点セット。"
-  },
-  {
-    level:"A0", title:"飲み物オーダー", ja:"飲み物→サイズ→ありがとう",
-    lines:[
-      "Can I have {DRINK}, please?",
-      "Sure.",
-      "Small, please.",
-      "{THANKS}",
-      "You're welcome."
-    ],
-    tips:"please を最後に置くと丁寧。"
-  },
-  {
-    level:"A0", title:"今どこ？", ja:"今いる場所→何してる",
-    lines:[
-      "Where are you?",
-      "I'm at {PLACE}.",
-      "What are you doing?",
-      "I'm going to {activity}.",
-      "OK."
-    ],
-    tips:"Where are you? / I'm at… をセットで。"
-  },
+function templatesUpTo(templates, level){
+  const idx = LEVELS.indexOf(level);
+  return templates.filter(t => LEVELS.indexOf(t.level) <= idx);
+}
 
-  /* ======================
-     A1（中学生の日常：10〜12ターン中心）
-  ====================== */
-  {
-    level:"A1", title:"放課後プラン調整", ja:"放課後→誘い→時間→OK",
-    lines:[
-      "Hey, {NAME}.",
-      "Hi!",
-      "What are you doing {TIME}?",
-      "I'm going to {activity}.",
-      "Do you want to come with me?",
-      "Maybe.",
-      "What time?",
-      "Let's meet {TIME}.",
-      "Where?",
-      "At the {PLACE}.",
-      "Sounds good!",
-      "See you then."
-    ],
-    tips:"What time? / Where? が言えると会話が伸びる。"
+/* 直列テンプレ（長め・自然な中学生会話） */
+const LINEAR_TEMPLATES = [
+  { level:"A0", title:"あいさつフル", ja:"挨拶→調子→締め",
+    lines:["Hi, {NAME}!","Hi!","How are you?","I'm {FEEL}.","How about you?","I'm {FEEL}, {THANKS}","See you later.","See you."],
+    tips:"止まらず言い切る。"
   },
-  {
-    level:"A1", title:"宿題ヘルプ", ja:"困りごと→お願い→ありがとう",
-    lines:[
-      "Do you have homework?",
-      "Yes, I do.",
-      "It's hard.",
-      "What's wrong?",
-      "I don't understand this.",
-      "Can you help me?",
-      "Sure.",
-      "How do you solve it?",
-      "Like this.",
-      "{THANKS}",
-      "No problem."
-    ],
-    tips:"Can you help me? が言えると助けを呼べる。"
+  { level:"A0", title:"好き嫌い深掘り", ja:"好き→理由→返す",
+    lines:["Do you like {FOOD}?","{YN_DO}","Why?","Because it's tasty.","How about you?","{YN_DO}","{POS}"],
+    tips:"Do you like…?→Yes/No→Because…"
   },
-  {
-    level:"A1", title:"部活ある？", ja:"部活→何時まで→応援",
-    lines:[
-      "Do you have practice today?",
-      "{YN_DO}",
-      "What sport?",
-      "I play {HOBBY}.",
-      "When does it start?",
-      "It starts {TIME}.",
-      "When does it finish?",
-      "It finishes at 6 p.m.",
-      "Good luck!",
-      "{THANKS}",
-      "See you."
-    ],
-    tips:"When does it start/finish? の型を覚える。"
+  { level:"A1", title:"放課後プラン", ja:"誘い→時間→場所→決定",
+    lines:["Hey, {NAME}.","Hi!","What are you doing {TIME}?","I'm going to {ACT}.","Do you want to come with me?","Maybe.","What time?","Let's meet {TIME}.","Where?","At the {PLACE}.","{POS}","See you then."],
+    tips:"What time? / Where? を入れると会話が伸びる。"
   },
-  {
-    level:"A1", title:"コンビニ買い物", ja:"何買う→おすすめ→決める",
-    lines:[
-      "I'm going to the convenience store.",
-      "What will you buy?",
-      "Maybe {FOOD}.",
-      "How about {FOOD}?",
-      "Sounds good.",
-      "Anything to drink?",
-      "Yes, {DRINK}.",
-      "Nice.",
-      "{THANKS}",
-      "Let's go."
-    ],
-    tips:"Maybe / How about を使うと自然。"
+  { level:"A1", title:"忘れ物", ja:"忘れた→頼む→お礼",
+    lines:["Oh no. I forgot my homework.","Really?","Can you help me?","Sure. What's the problem?","This part.","OK. Let's do it together.","{THANKS}"],
+    tips:"Can you help me? は最重要。"
   },
-  {
-    level:"A1", title:"体調どう？", ja:"体調→心配→提案",
-    lines:[
-      "You look tired.",
-      "Yeah, I'm {FEEL}.",
-      "Are you OK?",
-      "Not really.",
-      "Do you want to rest?",
-      "Yes, please.",
-      "Let's go to the nurse's office.",
-      "OK.",
-      "{THANKS}",
-      "Take care."
-    ],
-    tips:"Are you OK? / Not really. は便利。"
+  { level:"A2", title:"週末の約束", ja:"空き→場所→交通→決める",
+    lines:["Are you free {DAY}?","Maybe. Why?","Let's go to the {PLACE}.","{POS}","What time should we meet?","How about 10 a.m.?","OK.","How will you get there?","I'll go {TRANS}.","Me too.","See you {DAY}.","Don't be late!"],
+    tips:"How will you get there? まで行くと強い。"
   },
-  {
-    level:"A1", title:"映画の話", ja:"見た→感想→おすすめ",
-    lines:[
-      "Did you watch a movie yesterday?",
-      "Yes, I did.",
-      "What movie?",
-      "It was fun.",
-      "Who did you watch it with?",
-      "With my family.",
-      "Do you recommend it?",
-      "Yes, I do.",
-      "I want to watch it.",
-      "Let's go someday."
-    ],
-    tips:"Do you recommend it? を覚えると会話が伸びる。"
+  { level:"A2", title:"体調", ja:"具合→心配→提案",
+    lines:["You look {FEEL}.","Yeah, a little.","Are you OK?","I'm not sure.","You should take a rest.","Good idea.","{THANKS}"],
+    tips:"You should… で提案できると強い。"
   },
-
-  /* ======================
-     A2（予定調整/理由/移動/丁寧）
-  ====================== */
-  {
-    level:"A2", title:"週末の約束", ja:"週末→空き→場所→交通→決める",
-    lines:[
-      "Are you free {DAY}?",
-      "Maybe. Why?",
-      "Let's go to the {PLACE}.",
-      "Sounds good.",
-      "What time should we meet?",
-      "How about 10 a.m.?",
-      "OK.",
-      "How will you get there?",
-      "I'll go {transport}.",
-      "Me too.",
-      "See you {DAY}.",
-      "Don't be late!"
-    ],
-    tips:"How will you get there? まで行くと“会話感”が出る。"
+  { level:"B1", title:"遅刻→変更", ja:"遅れる→謝る→変更→確認",
+    lines:["Hey, I'm running late.","How late?","About {MIN} minutes.","OK. Where are you now?","I'm near the {PLACE}.","No problem.","{SORRY}","Let's meet at the entrance.","Got it.","Text me when you arrive.","Sure.","See you soon."],
+    tips:"I'm running late. / About 10 minutes."
   },
-  {
-    level:"A2", title:"断る→代案", ja:"行けない→理由→別日",
-    lines:[
-      "Do you want to hang out {DAY}?",
-      "I'd love to, but I can't.",
-      "Why not?",
-      "{reason}.",
-      "Oh, I see.",
-      "How about {DAY}?",
-      "That works for me.",
-      "Great.",
-      "Where should we go?",
-      "Let's decide later.",
-      "OK, message me.",
-      "Sure."
-    ],
-    tips:"I'd love to, but… は断りの王道。"
-  },
-  {
-    level:"A2", title:"忘れ物対応", ja:"忘れた→貸して→返す約束",
-    lines:[
-      "Oh no. I forgot my notebook.",
-      "Really?",
-      "Can I borrow yours?",
-      "Sure, but be careful.",
-      "{THANKS}",
-      "When will you return it?",
-      "I'll return it tomorrow.",
-      "OK.",
-      "Don't forget.",
-      "{OK}"
-    ],
-    tips:"borrow / return をセットで覚える。"
-  },
-  {
-    level:"A2", title:"道案内（丁寧）", ja:"駅まで→まっすぐ→曲がる→確認",
-    lines:[
-      "Excuse me. Where is the station?",
-      "Go straight.",
-      "Turn left at the corner.",
-      "Is it far?",
-      "No, it's about {minutes} minutes.",
-      "{THANKS}",
-      "You're welcome.",
-      "Did you get it?",
-      "Yes, I did.",
-      "Have a nice day."
-    ],
-    tips:"Go straight / Turn left/right を型で。"
-  },
-  {
-    level:"A2", title:"テスト勉強計画", ja:"テスト→一緒に勉強→時間→内容",
-    lines:[
-      "Do you have a test soon?",
-      "Yes, I do.",
-      "What subject?",
-      "{SUBJECT}.",
-      "Do you want to study together?",
-      "Sure.",
-      "When are you free?",
-      "I'm free {DAY}.",
-      "Let's meet at the {PLACE}.",
-      "What should we study first?",
-      "Let's start with vocabulary.",
-      "OK."
-    ],
-    tips:"When are you free? が言えると予定が組める。"
-  },
-
-  /* ======================
-     B1（提案/意見/理由/条件/軽い交渉）
-  ====================== */
-  {
-    level:"B1", title:"提案→理由→合意", ja:"提案→理由→合意→段取り",
-    lines:[
-      "Why don't we join the school event?",
-      "I'm not sure.",
-      "It could be fun.",
-      "What do we need to do?",
-      "We can help with planning.",
-      "When is the meeting?",
-      "It's {DAY} {TIME}.",
-      "OK, I'll join.",
-      "Great.",
-      "Let's invite {NAME} too.",
-      "Good idea.",
-      "I'll message them."
-    ],
-    tips:"I'm not sure. → 理由を足して説得、がB1の入口。"
-  },
-  {
-    level:"B1", title:"相談（軽い悩み）", ja:"悩み→助言→感謝",
-    lines:[
-      "Can I ask you something?",
-      "Sure. What's up?",
-      "I'm worried about {SUBJECT}.",
-      "What part is difficult?",
-      "I can't remember the rules.",
-      "Why don't you make a small checklist?",
-      "That sounds helpful.",
-      "Also, practice for 10 minutes every day.",
-      "OK, I'll try that.",
-      "{THANKS}",
-      "Anytime."
-    ],
-    tips:"Why don't you… の“助言”用途。"
-  },
-  {
-    level:"B1", title:"待ち合わせ調整（変更あり）", ja:"遅れる→謝る→変更→確認",
-    lines:[
-      "Hey, I'm running late.",
-      "How late?",
-      "About {minutes} minutes.",
-      "OK. Where are you now?",
-      "I'm near the {PLACE}.",
-      "No problem.",
-      "{sorry}",
-      "Let's meet at the entrance.",
-      "Got it.",
-      "Text me when you arrive.",
-      "Sure.",
-      "See you soon."
-    ],
-    tips:"I'm running late. / About 10 minutes. を言えると強い。"
+  { level:"B1", title:"勉強の相談", ja:"困り→提案→約束",
+    lines:["I'm worried about the {SUBJECT} test.","Me too.","Why don't we study together?","Good idea.","Let's meet at the {PLACE} {DAY}.","What time?","How about {TIME}?","Perfect.","See you then."],
+    tips:"Why don't we… は提案の万能型。"
   },
 ];
 
-/*
-  ★補足：
-  - ここではテンプレ数を増やしました。
-  - さらに増やしたい場合は、この配列に同じ形式で追加していくだけでOKです。
-*/
+/* 分岐テンプレ（相手の返答を選択→次が変わる） */
+const BRANCH_TEMPLATES = [
+  {
+    level:"A0", title:"好き？→返答選択", ja:"相手の返事であなたの返しが変わる",
+    steps:[
+      {role:"A", say:"Do you like {FOOD}?"},
+      {role:"B", choose:[
+        { b:"Yes, I do.", next:[
+          {role:"A", say:"Nice! I like it too."},
+          {role:"B", say:"{POS}"},
+          {role:"A", say:"What's your favorite food?"}
+        ]},
+        { b:"No, I don't.", next:[
+          {role:"A", say:"Oh, I see. What do you like?"},
+          {role:"B", say:"I like {FOOD}."},
+          {role:"A", say:"{POS}"}
+        ]}
+      ]},
+      {role:"B", say:"See you."},
+      {role:"A", say:"See you."}
+    ],
+    tips:"相手の返答を選ぶ→次のあなたの一言が変わる。"
+  },
+  {
+    level:"A1", title:"放課後の誘い（OK/NG分岐）", ja:"誘い→返答で展開が変わる",
+    steps:[
+      {role:"A", say:"Are you free {DAY}?"},
+      {role:"B", choose:[
+        { b:"Yes, I'm free.", next:[
+          {role:"A", say:"Great! Let's go to the {PLACE}."},
+          {role:"B", say:"{POS}"},
+          {role:"A", say:"What time should we meet?"},
+          {role:"B", say:"How about {TIME}?"},
+          {role:"A", say:"OK. See you then."}
+        ]},
+        { b:"Sorry, I'm busy.", next:[
+          {role:"A", say:"No problem. Maybe next time."},
+          {role:"B", say:"{THANKS}"},
+          {role:"A", say:"How about {DAY}?"}
+        ]}
+      ]},
+      {role:"B", say:"Bye."},
+      {role:"A", say:"Bye."}
+    ],
+    tips:"断られても How about… で継続。"
+  },
+  {
+    level:"A2", title:"宿題ヘルプ（理解OK/NG分岐）", ja:"理解できた/できないで分岐",
+    steps:[
+      {role:"A", say:"Do you understand this question?"},
+      {role:"B", choose:[
+        { b:"Yes, I do.", next:[
+          {role:"A", say:"Great. Let's do the next one."},
+          {role:"B", say:"OK."},
+          {role:"A", say:"Take your time."}
+        ]},
+        { b:"No, I don't.", next:[
+          {role:"A", say:"OK. Let me explain it again."},
+          {role:"B", say:"{THANKS}"},
+          {role:"A", say:"First, look at this part."}
+        ]}
+      ]},
+      {role:"B", say:"{POS}"},
+      {role:"A", say:"You're doing well."}
+    ],
+    tips:"Let me explain… は使い回せる。"
+  },
+  {
+    level:"B1", title:"提案→同意/保留分岐", ja:"提案→相手の反応で説得/合意",
+    steps:[
+      {role:"A", say:"Why don't we study {SUBJECT} together {DAY}?"},
+      {role:"B", choose:[
+        { b:"Sounds good.", next:[
+          {role:"A", say:"Great. Let's meet at the {PLACE}."},
+          {role:"B", say:"OK. What time?"},
+          {role:"A", say:"How about {TIME}?"},
+          {role:"B", say:"Perfect."}
+        ]},
+        { b:"I'm not sure.", next:[
+          {role:"A", say:"It will help us for the test."},
+          {role:"B", say:"Maybe."},
+          {role:"A", say:"Just 30 minutes is fine."}
+        ]}
+      ]},
+      {role:"B", say:"See you."},
+      {role:"A", say:"See you."}
+    ],
+    tips:"I'm not sure. の後は理由＋軽い提案。"
+  },
+];
 
+function buildBranchSceneFromTemplate(tpl, level, idNum){
+  const steps = [];
+  for(const st of tpl.steps){
+    if(st.say){
+      const s = fillSlots(st.say);
+      const one = splitToPracticeSentences(s)[0] || s;
+      steps.push({role: st.role || "A", say: one});
+    }else if(st.choose){
+      const options = st.choose.map(opt=>{
+        const bLine = splitToPracticeSentences(fillSlots(opt.b))[0] || fillSlots(opt.b);
+        const nextSteps = (opt.next || []).map(ns=>{
+          const nsSay = splitToPracticeSentences(fillSlots(ns.say))[0] || fillSlots(ns.say);
+          return { role: ns.role || "A", say: nsSay };
+        });
+        return { b: bLine, next: nextSteps };
+      });
+      steps.push({role:"B", choose: options});
+    }
+  }
+  if(!steps.length || steps[0].role !== "A") steps.unshift({role:"A", say:"Hi!"});
+  return {
+    id: `cvb_${level}_${idNum}`,
+    level,
+    title: tpl.title,
+    ja: tpl.ja,
+    tips: tpl.tips,
+    type: "conv_branch",
+    steps,
+    state: { i:0, queue:[], partnerLine:"", awaitingChoice:false },
+    en: steps[0].say || ""
+  };
+}
 
-function templatesUpTo(level){
-  const idx = LEVELS.indexOf(level);
-  return CONV_TEMPLATES.filter(t => LEVELS.indexOf(t.level) <= idx);
+function buildLinearSceneFromTemplate(tpl, level, idNum){
+  const filled = tpl.lines.map(line => fillSlots(line));
+  const turns = [];
+  for(const line of filled) turns.push(...splitToPracticeSentences(line));
+  return {
+    id: `cvl_${level}_${idNum}`,
+    level,
+    title: tpl.title,
+    ja: tpl.ja,
+    tips: tpl.tips,
+    type: "conv_linear",
+    turns,
+    turnIndex: 0,
+    en: turns[0] || ""
+  };
 }
 
 function buildConversationScenes(level, total=300){
-  const tpls = templatesUpTo(level);
+  const lin = templatesUpTo(LINEAR_TEMPLATES, level);
+  const br  = templatesUpTo(BRANCH_TEMPLATES, level);
   const scenes = [];
   let id = 1;
+
   while(scenes.length < total){
-    const tpl = pick(tpls);
-    const filled = tpl.lines.map(line => fillSlots(line));
-    const turns = [];
-    for(const line of filled) turns.push(...splitToPracticeSentences(line));
-    scenes.push({
-      id: `cv_${level}_${id++}`,
-      level,
-      title: tpl.title,
-      ja: tpl.ja,
-      tips: tpl.tips,
-      type: "conv",
-      turns,
-      turnIndex: 0,
-      en: turns[0] || ""
-    });
+    const useBranch = br.length && (Math.random() < 0.55);
+    if(useBranch){
+      scenes.push(buildBranchSceneFromTemplate(pick(br), level, id++));
+    }else{
+      scenes.push(buildLinearSceneFromTemplate(pick(lin.length?lin:LINEAR_TEMPLATES), level, id++));
+    }
   }
   return scenes;
 }
 
-function convAdvance(scene){
-  if(!scene || scene.type !== "conv" || !Array.isArray(scene.turns)) return;
+function getConversationPool(){
+  const lv = elLevel.value;
+  return buildConversationScenes(lv, 300);
+}
+
+function linearAdvance(scene){
+  if(!scene || scene.type !== "conv_linear") return;
   scene.turnIndex = (scene.turnIndex ?? 0) + 1;
   if(scene.turnIndex >= scene.turns.length) scene.turnIndex = 0;
   scene.en = scene.turns[scene.turnIndex] || "";
 }
+
+function branchAdvance(scene){
+  if(!scene || scene.type !== "conv_branch") return;
+  const st = scene.state || (scene.state = {i:0, queue:[], partnerLine:"", awaitingChoice:false});
+
+  if(st.queue.length){
+    const nx = st.queue.shift();
+    if(nx.role === "B"){
+      st.partnerLine = nx.say;
+      return branchAdvance(scene);
+    }else{
+      st.partnerLine = "";
+      scene.en = nx.say;
+      st.awaitingChoice = false;
+      return;
+    }
+  }
+
+  st.i++;
+  if(st.i >= scene.steps.length){
+    st.i = 0;
+    st.partnerLine = "";
+    st.awaitingChoice = false;
+    scene.en = scene.steps[0]?.say || "";
+    return;
+  }
+
+  const cur = scene.steps[st.i];
+  if(!cur) return;
+
+  if(cur.choose){
+    st.awaitingChoice = true;
+    scene.en = "";
+    return;
+  }
+
+  if(cur.role === "B"){
+    st.partnerLine = cur.say || "";
+    return branchAdvance(scene);
+  }
+
+  st.partnerLine = "";
+  st.awaitingChoice = false;
+  scene.en = cur.say || "";
+}
+
+function branchPickChoice(scene, optionIndex){
+  if(!scene || scene.type !== "conv_branch") return;
+  const st = scene.state;
+  const cur = scene.steps[st.i];
+  if(!cur || !cur.choose) return;
+
+  const opt = cur.choose[optionIndex];
+  if(!opt) return;
+
+  st.partnerLine = opt.b || "";
+  st.queue = (opt.next || []).slice();
+  st.awaitingChoice = false;
+  branchAdvance(scene);
+}
+
 function convNormalizeEn(scene){
-  if(!scene || scene.type !== "conv") return;
+  if(!scene) return;
   if(typeof scene.en !== "string") scene.en = "";
   if(scene.en.includes("/")){
     const alts = scene.en.split("/").map(s=>s.trim()).filter(Boolean);
@@ -724,6 +681,176 @@ function convNormalizeEn(scene){
   }
   const one = splitToPracticeSentences(scene.en)[0];
   if(one) scene.en = one;
+}
+
+// ★ここで会話シーンを生成（レベル変更時にも作り直す）
+let SCENES = getConversationPool();
+
+/* =========================
+   5) Renders: Talk（分岐対応）
+========================= */
+function pickScene(){
+  if(!SCENES || !SCENES.length) SCENES = getConversationPool();
+  return SCENES[Math.floor(Math.random()*SCENES.length)];
+}
+
+// 分岐対応の renderTalk に上書き
+function renderTalk(){
+  const scene = CURRENT.scene || pickScene();
+  CURRENT.scene = scene;
+
+  convNormalizeEn(scene);
+
+  const isBranch = scene.type === "conv_branch";
+  const st = isBranch ? scene.state : null;
+  const awaiting = isBranch ? !!st.awaitingChoice : false;
+
+  const partnerHtml = isBranch && st.partnerLine
+    ? `<div class="divider"></div>
+       <div class="h3">相手（表示）</div>
+       <div style="font-size:16px;font-weight:700">${escapeHtml(st.partnerLine)}</div>
+       <div class="muted small">※これは選択した相手の返答（録音不要）</div>`
+    : "";
+
+  let choiceHtml = "";
+  if(isBranch && awaiting){
+    const cur = scene.steps[st.i];
+    const opts = (cur && cur.choose) ? cur.choose : [];
+    choiceHtml = `
+      <div class="divider"></div>
+      <div class="h3">相手の返答を選ぶ（ここで分岐）</div>
+      <div class="choices" id="branchChoices">
+        ${opts.map((o,idx)=>`<div class="choice" data-idx="${idx}">${escapeHtml(o.b)}</div>`).join("")}
+      </div>
+      <div class="muted small">※選ぶと、次にあなたが言う一文が変わります。</div>
+    `;
+  }
+
+  const practiceLine = scene.en || (isBranch && awaiting ? "(相手の返答を選んでください)" : "");
+
+  elLeft.innerHTML = `
+    <div class="h2">会話練習（分岐あり：相手返答を選ぶ → 次の文が変わる）</div>
+    <div class="muted">お手本 → 録音 → 差分 → 日本語フィードバック。分岐会話は「相手の返答」を選ぶと展開が変わります。</div>
+    <div class="divider"></div>
+
+    <div class="qbox">
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <div class="h3">${escapeHtml(scene.title)} <span class="chip">${scene.level}</span> <span class="chip">${isBranch ? "分岐" : "直列"}</span></div>
+          <div class="muted">日本語：${escapeHtml(scene.ja)}</div>
+        </div>
+        <button class="primary" id="nextScene">別シーン</button>
+      </div>
+
+      ${partnerHtml}
+      ${choiceHtml}
+
+      <div class="divider"></div>
+      <div class="h3">あなた（練習する1文）</div>
+      <div style="font-size:18px;font-weight:800">${escapeHtml(practiceLine)}</div>
+      <div class="muted">${escapeHtml(scene.tips||"")}</div>
+
+      <div class="divider"></div>
+      <div class="row">
+        <button class="primary" id="btnSpeak" ${(!scene.en ? "disabled" : "")}>🔊 お手本を聞く</button>
+        <button class="ok" id="btnRec" ${(!scene.en ? "disabled" : "")}>🎙️ 録音して判定</button>
+      </div>
+
+      <div class="divider"></div>
+      <div class="h3">結果</div>
+      <div class="muted small">緑=一致 / 赤=不足（期待したのに聞こえない）</div>
+      <div id="diffExp" class="mono" style="margin-top:6px"></div>
+      <div class="muted small" style="margin-top:10px">余分に聞こえた語（赤）</div>
+      <div id="diffExtra" class="mono" style="margin-top:6px"></div>
+
+      <div class="divider"></div>
+      <div class="h3">日本語フィードバック</div>
+      <div id="fb" class="muted"></div>
+    </div>
+  `;
+
+  document.getElementById("nextScene").onclick = ()=>{
+    CURRENT.scene = pickScene();
+    renderTalk();
+  };
+
+  if(isBranch && awaiting){
+    const list = document.getElementById("branchChoices");
+    if(list){
+      [...list.querySelectorAll(".choice")].forEach(div=>{
+        div.onclick = ()=>{
+          const idx = Number(div.getAttribute("data-idx"));
+          branchPickChoice(scene, idx);
+          renderTalk();
+        };
+      });
+    }
+  }
+
+  document.getElementById("btnSpeak").onclick = ()=> speak(scene.en);
+
+  document.getElementById("btnRec").onclick = async ()=>{
+    const rec = createRecognizer();
+    if(!rec){
+      alert("このブラウザは音声認識に対応していません。");
+      return;
+    }
+    bumpToday();
+    renderStats();
+
+    const btn = document.getElementById("btnRec");
+    btn.disabled = true;
+    btn.textContent = "🎙️ 聞き取り中...";
+
+    rec.onresult = (e)=>{
+      const said = e.results?.[0]?.[0]?.transcript || "";
+      const { expHtml, extraHtml } = highlightDiff(scene.en, said);
+      document.getElementById("diffExp").innerHTML = expHtml || "(認識できませんでした)";
+      document.getElementById("diffExtra").innerHTML = extraHtml;
+
+      const fb = japaneseWeaknessFeedback(scene.en, said);
+      const lines = [];
+      lines.push(`一致度（目安）：<b>${fb.score}%</b>`);
+      if(fb.missing.length) lines.push(`不足しがちな語：<b>${fb.missing.join(", ")}</b>`);
+      if(fb.extra.length) lines.push(`余分に聞こえた語：<b>${fb.extra.join(", ")}</b>`);
+      if(!fb.missing.length && !fb.extra.length) lines.push("かなり近いです。次は“つながり”を意識。");
+
+      if(fb.tips.length){
+        lines.push("<br><b>日本人向けの指摘：</b>");
+        fb.tips.forEach(t=>{
+          lines.push(`• ${escapeHtml(t.text)}`);
+          if(t.tag) addWeak(t.tag, -2);
+        });
+      }
+      document.getElementById("fb").innerHTML = lines.join("<br>");
+
+      addHistory({ type:"talk", title:`会話:${scene.title}`, ok:null });
+      saveState(STATE);
+      renderStats();
+
+      // 次の文へ進む
+      if(scene.type === "conv_linear") linearAdvance(scene);
+      else if(scene.type === "conv_branch") branchAdvance(scene);
+
+      renderTalk();
+
+      btn.disabled = false;
+      btn.textContent = "🎙️ 録音して判定";
+    };
+
+    rec.onerror = ()=>{
+      btn.disabled = false;
+      btn.textContent = "🎙️ 録音して判定";
+      document.getElementById("fb").innerHTML = "音声認識でエラーになりました。Edgeの🔒からマイク許可を確認してください。";
+    };
+
+    rec.onend = ()=>{
+      btn.disabled = false;
+      btn.textContent = "🎙️ 録音して判定";
+    };
+
+    try { rec.start(); } catch { btn.disabled=false; btn.textContent="🎙️ 録音して判定"; }
+  };
 }
 
 /* =========================
@@ -1260,6 +1387,7 @@ renderStats();
 elLevel.onchange = ()=>{
   localStorage.setItem(APP_KEY+"_level", elLevel.value);
   CURRENT = { drill:null, scene:null, talkPool:null };
+  SCENES = getConversationPool();
   renderLeft();
 };
 
