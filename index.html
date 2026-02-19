@@ -683,8 +683,6 @@ function convNormalizeEn(scene){
   if(one) scene.en = one;
 }
 
-// ★ここで会話シーンを生成（レベル変更時にも作り直す）
-let SCENES = getConversationPool();
 
 /* =========================
    5) Renders: Talk（分岐対応）
@@ -982,11 +980,10 @@ function levelFilter(items){
 }
 
 /* =========================
-   5) Talk (no SCENES, generate pool)
+   5) Talk（分岐対応 / 300 scenes / 1文ずつ）
 ========================= */
 function getTalkPool(){
   const lv = elLevel.value;
-  // レベルで生成。毎回生成すると重いのでキャッシュ
   if(!CURRENT.talkPool || CURRENT.talkPoolLevel !== lv){
     CURRENT.talkPool = buildConversationScenes(lv, 300);
     CURRENT.talkPoolLevel = lv;
@@ -999,34 +996,72 @@ function pickScene(){
   return pool[Math.floor(Math.random()*pool.length)];
 }
 
+function convAdvance(scene){
+  if(!scene) return;
+  if(scene.type === "conv_linear") linearAdvance(scene);
+  else if(scene.type === "conv_branch") branchAdvance(scene);
+  else linearAdvance(scene);
+}
+
 function renderTalk(){
   const scene = CURRENT.scene || pickScene();
   CURRENT.scene = scene;
-  convNormalizeEn(scene); // 念のため 1文化
+
+  convNormalizeEn(scene);
+
+  const isBranch = (scene.type === "conv_branch");
+  const st = isBranch ? scene.state : null;
+  const awaiting = isBranch ? !!st.awaitingChoice : false;
+
+  const partnerHtml = (isBranch && st.partnerLine)
+    ? `<div class="divider"></div>
+       <div class="h3">相手（表示）</div>
+       <div style="font-size:16px;font-weight:700">${escapeHtml(st.partnerLine)}</div>
+       <div class="muted small">※これは相手の返答（録音不要）</div>`
+    : "";
+
+  let choiceHtml = "";
+  if(isBranch && awaiting){
+    const cur = scene.steps[st.i];
+    const opts = (cur && cur.choose) ? cur.choose : [];
+    choiceHtml = `
+      <div class="divider"></div>
+      <div class="h3">相手の返答を選ぶ（ここで分岐）</div>
+      <div class="choices" id="branchChoices">
+        ${opts.map((o,idx)=>`<div class="choice" data-idx="${idx}">${escapeHtml(o.b)}</div>`).join("")}
+      </div>
+      <div class="muted small">※選ぶと、次にあなたが言う1文が変わります。</div>
+    `;
+  }
+
+  const practiceLine = scene.en || (isBranch && awaiting ? "(相手の返答を選んでください)" : "");
 
   elLeft.innerHTML = `
-    <div class="h2">会話練習（お手本 → 録音 → 差分 → 日本語フィードバック）</div>
-    <div class="muted">会話は「1文ずつ」練習。録音して判定すると自動で次の文に進みます。</div>
+    <div class="h2">会話練習（分岐あり：相手返答を選ぶ → 次の文が変わる）</div>
+    <div class="muted">お手本 → 録音 → 差分 → 日本語フィードバック。会話は1文ずつ進みます。</div>
     <div class="divider"></div>
 
     <div class="qbox">
       <div class="row" style="justify-content:space-between">
         <div>
-          <div class="h3">${escapeHtml(scene.title)} <span class="chip">${scene.level}</span></div>
+          <div class="h3">${escapeHtml(scene.title)} <span class="chip">${scene.level}</span> <span class="chip">${isBranch ? "分岐" : "直列"}</span></div>
           <div class="muted">日本語：${escapeHtml(scene.ja)}</div>
         </div>
         <button class="primary" id="nextScene">別シーン</button>
       </div>
-      <div class="divider"></div>
 
-      <div class="h3">お手本（英語：1文）</div>
-      <div style="font-size:18px;font-weight:800">${escapeHtml(scene.en)}</div>
+      ${partnerHtml}
+      ${choiceHtml}
+
+      <div class="divider"></div>
+      <div class="h3">あなた（練習する1文）</div>
+      <div style="font-size:18px;font-weight:800">${escapeHtml(practiceLine)}</div>
       <div class="muted">${escapeHtml(scene.tips||"")}</div>
 
       <div class="divider"></div>
       <div class="row">
-        <button class="primary" id="btnSpeak">🔊 お手本を聞く</button>
-        <button class="ok" id="btnRec">🎙️ 録音して判定（次の文へ）</button>
+        <button class="primary" id="btnSpeak" ${(!scene.en ? "disabled" : "")}>🔊 お手本を聞く</button>
+        <button class="ok" id="btnRec" ${(!scene.en ? "disabled" : "")}>🎙️ 録音して判定</button>
       </div>
 
       <div class="divider"></div>
@@ -1039,9 +1074,6 @@ function renderTalk(){
       <div class="divider"></div>
       <div class="h3">日本語フィードバック</div>
       <div id="fb" class="muted"></div>
-
-      <div class="divider"></div>
-      <div class="muted small">進捗：<b>${(scene.turnIndex||0)+1}</b> / ${scene.turns?.length||1} 文</div>
     </div>
   `;
 
@@ -1049,6 +1081,20 @@ function renderTalk(){
     CURRENT.scene = pickScene();
     renderTalk();
   };
+
+  if(isBranch && awaiting){
+    const list = document.getElementById("branchChoices");
+    if(list){
+      [...list.querySelectorAll(".choice")].forEach(div=>{
+        div.onclick = ()=>{
+          const idx = Number(div.getAttribute("data-idx"));
+          branchPickChoice(scene, idx);
+          renderTalk();
+        };
+      });
+    }
+  }
+
   document.getElementById("btnSpeak").onclick = ()=> speak(scene.en);
 
   document.getElementById("btnRec").onclick = async ()=>{
@@ -1075,7 +1121,7 @@ function renderTalk(){
       lines.push(`一致度（目安）：<b>${fb.score}%</b>`);
       if(fb.missing.length) lines.push(`不足しがちな語：<b>${fb.missing.join(", ")}</b>`);
       if(fb.extra.length) lines.push(`余分に聞こえた語：<b>${fb.extra.join(", ")}</b>`);
-      if(!fb.missing.length && !fb.extra.length) lines.push("かなり近いです。次はスピードを少し上げて“つながり”を意識。");
+      if(!fb.missing.length && !fb.extra.length) lines.push("かなり近いです。次は“つながり”を意識。");
 
       if(fb.tips.length){
         lines.push("<br><b>日本人向けの指摘：</b>");
@@ -1090,24 +1136,27 @@ function renderTalk(){
       saveState(STATE);
       renderStats();
 
-      // ★ここが「3が見つからない」問題の解決：結果の後に自動で次の1文へ
+      // 次の文へ
       convAdvance(scene);
       convNormalizeEn(scene);
       renderTalk();
+
+      btn.disabled = false;
+      btn.textContent = "🎙️ 録音して判定";
     };
 
     rec.onerror = ()=>{
       btn.disabled = false;
-      btn.textContent = "🎙️ 録音して判定（次の文へ）";
+      btn.textContent = "🎙️ 録音して判定";
       document.getElementById("fb").innerHTML = "音声認識でエラーになりました。Edgeの🔒からマイク許可を確認してください。";
     };
 
     rec.onend = ()=>{
       btn.disabled = false;
-      btn.textContent = "🎙️ 録音して判定（次の文へ）";
+      btn.textContent = "🎙️ 録音して判定";
     };
 
-    try { rec.start(); } catch { btn.disabled=false; btn.textContent="🎙️ 録音して判定（次の文へ）"; }
+    try { rec.start(); } catch { btn.disabled=false; btn.textContent="🎙️ 録音して判定"; }
   };
 }
 
@@ -1387,7 +1436,6 @@ renderStats();
 elLevel.onchange = ()=>{
   localStorage.setItem(APP_KEY+"_level", elLevel.value);
   CURRENT = { drill:null, scene:null, talkPool:null };
-  SCENES = getConversationPool();
   renderLeft();
 };
 
