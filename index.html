@@ -323,21 +323,31 @@ function splitToPracticeSentences(text){
 }
 
 const CONV_SLOTS = {
-  name: ["Sota","Yui","Haruto","Mina","Riku","Aoi"],
-  food: ["curry","ramen","pizza","sushi","pasta","fried chicken","salad"],
-  drink: ["water","tea","milk","juice","coffee","sports drink"],
-  hobby: ["soccer","baseball","basketball","tennis","music","games","reading","drawing"],
-  place: ["school","home","library","park","station","convenience store"],
-  day: ["today","tomorrow","this weekend","on Monday","on Saturday"],
-  time: ["after school","at 7 p.m.","in the morning","after dinner"],
-  feeling: ["good","great","fine","tired","sleepy","hungry"],
-  weather: ["sunny","rainy","cloudy","windy","hot","cold"],
-  subject: ["math","English","science","PE","history","music"],
+  name: ["Sota","Yui","Haruto","Mina","Riku","Aoi","Kenta","Sara","Ren","Hana"],
+  food: ["curry","ramen","pizza","sushi","pasta","fried chicken","salad","sandwich","rice ball","pancakes","ice cream"],
+  drink: ["water","tea","milk","juice","coffee","sports drink","hot chocolate"],
+  hobby: ["soccer","baseball","basketball","tennis","music","games","reading","drawing","cooking","dancing"],
+  place: ["school","home","library","park","station","convenience store","shopping mall","cafe","gym","classroom"],
+  day: ["today","tomorrow","this weekend","on Monday","on Tuesday","on Friday","on Saturday","next week"],
+  time: ["after school","at 7 p.m.","in the morning","after dinner","at lunch","before class","after practice"],
+  feeling: ["good","great","fine","tired","sleepy","hungry","excited","nervous","a bit sick"],
+  weather: ["sunny","rainy","cloudy","windy","hot","cold","humid","snowy"],
+  subject: ["math","English","science","PE","history","music","art","technology","Japanese"],
+  // 追加スロット（会話を伸ばす）
+  activity: ["study","practice","hang out","go shopping","watch a movie","play games","do homework","clean my room"],
+  reason: ["I have a test","I have practice","I'm busy","I'm free","I'm not feeling well","I promised my family"],
+  transport: ["by train","by bus","on foot","by bike","by car"],
+  minutes: ["5","10","15","20","30"],
+  // 分岐（/禁止なので配列で）
   yn_do: ["Yes, I do.", "No, I don't."],
-  me_too: ["Me too.", "Me neither.", "I like it too.", "I don't like it."],
-  thanks: ["Thanks.", "Thank you.", "Thanks a lot."],
-  ok: ["OK.", "Sure.", "No problem."],
+  yn_can: ["Yes, I can.", "No, I can't."],
+  yn_are: ["Yes, I am.", "No, I'm not."],
+  me_too: ["Me too.", "Me neither.", "I do too.", "I don't."],
+  thanks: ["Thanks.", "Thank you.", "Thanks a lot.", "I appreciate it."],
+  ok: ["OK.", "Sure.", "No problem.", "All right.", "Got it."],
+  sorry: ["Sorry.", "I'm sorry.", "Sorry about that."],
 };
+
 
 function fillSlots(line){
   return (line || "")
@@ -358,39 +368,317 @@ function fillSlots(line){
 }
 
 const CONV_TEMPLATES = [
-  { level:"A0", title:"あいさつ・気分", ja:"挨拶して気分を聞く",
-    lines:["Hi, {NAME}!","Hi!","How are you?","I'm {FEEL}.","How about you?","I'm {FEEL}, {THANKS}"],
-    tips:"短く区切って、止まらず言い切る。"
+  /* ======================
+     A0（超基礎：短め→少し長め）
+  ====================== */
+  {
+    level:"A0", title:"あいさつフル", ja:"挨拶→名前→調子→締め",
+    lines:[
+      "Hi, {NAME}!",
+      "Hi!",
+      "How are you?",
+      "I'm {FEEL}.",
+      "How about you?",
+      "I'm {FEEL}, {THANKS}",
+      "See you later.",
+      "See you."
+    ],
+    tips:"最初は“速さ”より“止まらない”が勝ち。"
   },
-  { level:"A0", title:"好き嫌い", ja:"好きかどうか聞く",
-    lines:["Do you like {FOOD}?","{YN_DO}","{ME_TOO}"],
-    tips:"Do you like ...? → Yes/No を一息で。"
+  {
+    level:"A0", title:"好き嫌い深掘り", ja:"好き→理由→相手へ返す",
+    lines:[
+      "Do you like {FOOD}?",
+      "{YN_DO}",
+      "Why?",
+      "Because it's tasty.",
+      "How about you?",
+      "{YN_DO}",
+      "{ME_TOO}"
+    ],
+    tips:"Do you like…?→Yes/No→Because… の3点セット。"
   },
-  { level:"A1", title:"放課後の予定", ja:"放課後の予定を言う",
-    lines:["What are you doing {TIME}?","I'm going to {PLACE}.","Do you want to come with me?","Yes, I'd love to.","{OK}"],
-    tips:"I'm going to ... を型で覚える。"
+  {
+    level:"A0", title:"飲み物オーダー", ja:"飲み物→サイズ→ありがとう",
+    lines:[
+      "Can I have {DRINK}, please?",
+      "Sure.",
+      "Small, please.",
+      "{THANKS}",
+      "You're welcome."
+    ],
+    tips:"please を最後に置くと丁寧。"
   },
-  { level:"A1", title:"教科", ja:"好きな教科を言う",
-    lines:["What's your favorite subject?","I like {SUBJECT}.","Why?","Because it's fun.","Nice!"],
-    tips:"Because で理由を足す練習。"
+  {
+    level:"A0", title:"今どこ？", ja:"今いる場所→何してる",
+    lines:[
+      "Where are you?",
+      "I'm at {PLACE}.",
+      "What are you doing?",
+      "I'm going to {activity}.",
+      "OK."
+    ],
+    tips:"Where are you? / I'm at… をセットで。"
   },
-  { level:"A1", title:"天気", ja:"天気の話をする",
-    lines:["How's the weather today?","It's {WEATHER}.","I like {WEATHER} weather.","Me too."],
-    tips:"It's ... の一文を明確に。"
+
+  /* ======================
+     A1（中学生の日常：10〜12ターン中心）
+  ====================== */
+  {
+    level:"A1", title:"放課後プラン調整", ja:"放課後→誘い→時間→OK",
+    lines:[
+      "Hey, {NAME}.",
+      "Hi!",
+      "What are you doing {TIME}?",
+      "I'm going to {activity}.",
+      "Do you want to come with me?",
+      "Maybe.",
+      "What time?",
+      "Let's meet {TIME}.",
+      "Where?",
+      "At the {PLACE}.",
+      "Sounds good!",
+      "See you then."
+    ],
+    tips:"What time? / Where? が言えると会話が伸びる。"
   },
-  { level:"A2", title:"誘い（日時つき）", ja:"日時を指定して誘う",
-    lines:["Are you free {DAY}?","Yes, I'm free.","Let's play {HOBBY} {TIME}.","Sounds good!","See you then."],
-    tips:"Are you free ...? のリズムを作る。"
+  {
+    level:"A1", title:"宿題ヘルプ", ja:"困りごと→お願い→ありがとう",
+    lines:[
+      "Do you have homework?",
+      "Yes, I do.",
+      "It's hard.",
+      "What's wrong?",
+      "I don't understand this.",
+      "Can you help me?",
+      "Sure.",
+      "How do you solve it?",
+      "Like this.",
+      "{THANKS}",
+      "No problem."
+    ],
+    tips:"Can you help me? が言えると助けを呼べる。"
   },
-  { level:"A2", title:"お願い", ja:"丁寧にお願いする",
-    lines:["Could you help me?","Sure.","Could you explain this problem?","Of course.","{THANKS}"],
-    tips:"Could you ...? は丁寧で万能。"
+  {
+    level:"A1", title:"部活ある？", ja:"部活→何時まで→応援",
+    lines:[
+      "Do you have practice today?",
+      "{YN_DO}",
+      "What sport?",
+      "I play {HOBBY}.",
+      "When does it start?",
+      "It starts {TIME}.",
+      "When does it finish?",
+      "It finishes at 6 p.m.",
+      "Good luck!",
+      "{THANKS}",
+      "See you."
+    ],
+    tips:"When does it start/finish? の型を覚える。"
   },
-  { level:"B1", title:"提案", ja:"提案して同意を取る",
-    lines:["Why don't we study {SUBJECT} together?","That's a good idea.","Let's meet at the library {DAY}.","Great.","See you!"],
-    tips:"Why don't we ...? は“提案”。"
-  }
+  {
+    level:"A1", title:"コンビニ買い物", ja:"何買う→おすすめ→決める",
+    lines:[
+      "I'm going to the convenience store.",
+      "What will you buy?",
+      "Maybe {FOOD}.",
+      "How about {FOOD}?",
+      "Sounds good.",
+      "Anything to drink?",
+      "Yes, {DRINK}.",
+      "Nice.",
+      "{THANKS}",
+      "Let's go."
+    ],
+    tips:"Maybe / How about を使うと自然。"
+  },
+  {
+    level:"A1", title:"体調どう？", ja:"体調→心配→提案",
+    lines:[
+      "You look tired.",
+      "Yeah, I'm {FEEL}.",
+      "Are you OK?",
+      "Not really.",
+      "Do you want to rest?",
+      "Yes, please.",
+      "Let's go to the nurse's office.",
+      "OK.",
+      "{THANKS}",
+      "Take care."
+    ],
+    tips:"Are you OK? / Not really. は便利。"
+  },
+  {
+    level:"A1", title:"映画の話", ja:"見た→感想→おすすめ",
+    lines:[
+      "Did you watch a movie yesterday?",
+      "Yes, I did.",
+      "What movie?",
+      "It was fun.",
+      "Who did you watch it with?",
+      "With my family.",
+      "Do you recommend it?",
+      "Yes, I do.",
+      "I want to watch it.",
+      "Let's go someday."
+    ],
+    tips:"Do you recommend it? を覚えると会話が伸びる。"
+  },
+
+  /* ======================
+     A2（予定調整/理由/移動/丁寧）
+  ====================== */
+  {
+    level:"A2", title:"週末の約束", ja:"週末→空き→場所→交通→決める",
+    lines:[
+      "Are you free {DAY}?",
+      "Maybe. Why?",
+      "Let's go to the {PLACE}.",
+      "Sounds good.",
+      "What time should we meet?",
+      "How about 10 a.m.?",
+      "OK.",
+      "How will you get there?",
+      "I'll go {transport}.",
+      "Me too.",
+      "See you {DAY}.",
+      "Don't be late!"
+    ],
+    tips:"How will you get there? まで行くと“会話感”が出る。"
+  },
+  {
+    level:"A2", title:"断る→代案", ja:"行けない→理由→別日",
+    lines:[
+      "Do you want to hang out {DAY}?",
+      "I'd love to, but I can't.",
+      "Why not?",
+      "{reason}.",
+      "Oh, I see.",
+      "How about {DAY}?",
+      "That works for me.",
+      "Great.",
+      "Where should we go?",
+      "Let's decide later.",
+      "OK, message me.",
+      "Sure."
+    ],
+    tips:"I'd love to, but… は断りの王道。"
+  },
+  {
+    level:"A2", title:"忘れ物対応", ja:"忘れた→貸して→返す約束",
+    lines:[
+      "Oh no. I forgot my notebook.",
+      "Really?",
+      "Can I borrow yours?",
+      "Sure, but be careful.",
+      "{THANKS}",
+      "When will you return it?",
+      "I'll return it tomorrow.",
+      "OK.",
+      "Don't forget.",
+      "{OK}"
+    ],
+    tips:"borrow / return をセットで覚える。"
+  },
+  {
+    level:"A2", title:"道案内（丁寧）", ja:"駅まで→まっすぐ→曲がる→確認",
+    lines:[
+      "Excuse me. Where is the station?",
+      "Go straight.",
+      "Turn left at the corner.",
+      "Is it far?",
+      "No, it's about {minutes} minutes.",
+      "{THANKS}",
+      "You're welcome.",
+      "Did you get it?",
+      "Yes, I did.",
+      "Have a nice day."
+    ],
+    tips:"Go straight / Turn left/right を型で。"
+  },
+  {
+    level:"A2", title:"テスト勉強計画", ja:"テスト→一緒に勉強→時間→内容",
+    lines:[
+      "Do you have a test soon?",
+      "Yes, I do.",
+      "What subject?",
+      "{SUBJECT}.",
+      "Do you want to study together?",
+      "Sure.",
+      "When are you free?",
+      "I'm free {DAY}.",
+      "Let's meet at the {PLACE}.",
+      "What should we study first?",
+      "Let's start with vocabulary.",
+      "OK."
+    ],
+    tips:"When are you free? が言えると予定が組める。"
+  },
+
+  /* ======================
+     B1（提案/意見/理由/条件/軽い交渉）
+  ====================== */
+  {
+    level:"B1", title:"提案→理由→合意", ja:"提案→理由→合意→段取り",
+    lines:[
+      "Why don't we join the school event?",
+      "I'm not sure.",
+      "It could be fun.",
+      "What do we need to do?",
+      "We can help with planning.",
+      "When is the meeting?",
+      "It's {DAY} {TIME}.",
+      "OK, I'll join.",
+      "Great.",
+      "Let's invite {NAME} too.",
+      "Good idea.",
+      "I'll message them."
+    ],
+    tips:"I'm not sure. → 理由を足して説得、がB1の入口。"
+  },
+  {
+    level:"B1", title:"相談（軽い悩み）", ja:"悩み→助言→感謝",
+    lines:[
+      "Can I ask you something?",
+      "Sure. What's up?",
+      "I'm worried about {SUBJECT}.",
+      "What part is difficult?",
+      "I can't remember the rules.",
+      "Why don't you make a small checklist?",
+      "That sounds helpful.",
+      "Also, practice for 10 minutes every day.",
+      "OK, I'll try that.",
+      "{THANKS}",
+      "Anytime."
+    ],
+    tips:"Why don't you… の“助言”用途。"
+  },
+  {
+    level:"B1", title:"待ち合わせ調整（変更あり）", ja:"遅れる→謝る→変更→確認",
+    lines:[
+      "Hey, I'm running late.",
+      "How late?",
+      "About {minutes} minutes.",
+      "OK. Where are you now?",
+      "I'm near the {PLACE}.",
+      "No problem.",
+      "{sorry}",
+      "Let's meet at the entrance.",
+      "Got it.",
+      "Text me when you arrive.",
+      "Sure.",
+      "See you soon."
+    ],
+    tips:"I'm running late. / About 10 minutes. を言えると強い。"
+  },
 ];
+
+/*
+  ★補足：
+  - ここではテンプレ数を増やしました。
+  - さらに増やしたい場合は、この配列に同じ形式で追加していくだけでOKです。
+*/
+
 
 function templatesUpTo(level){
   const idx = LEVELS.indexOf(level);
